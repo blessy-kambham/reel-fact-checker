@@ -2,7 +2,7 @@
 
 **In progress:** an AI fact-checking portfolio project built with React and FastAPI. The current stage supports text input, a fictional demo, and an opt-in research pipeline. Video/Reels input and Instagram integration are planned, not implemented.
 
-**Current milestone: a free fictional walkthrough and an implemented, opt-in text research pipeline. Live provider calls have not been validated with real credentials. This is an experimental portfolio MVP, not a trusted fact-checking service.**
+**Current milestone: a free fictional walkthrough and an implemented, opt-in text research pipeline. One capped text smoke test reached both live providers; its report was incomplete after a citation failed validation. Full live reliability and factual accuracy are not established. This is an experimental portfolio MVP, not a trusted fact-checking service.**
 
 ## Start here — no accounts or purchases
 
@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-49 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+55 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -129,7 +129,7 @@ This is engineering regression coverage, not an accuracy benchmark. We still nee
 - HTTPS only, no credentials or custom ports; private/reserved DNS targets and redirects are checked. Fetch size is capped at 1 MB and extracted text at 18,000 characters per source.
 - Source independence, freshness, and credibility need better evaluation. Source quality is assessed in the prompt; there is no calibrated credibility scoring model.
 - Analysis and citation checking use the same configured model in separate calls; correlated mistakes remain possible. Human review is necessary for consequential use.
-- Failed citations are excluded and flagged; the prototype withholds its verdict rather than automatically regenerating.
+- Failed citations are excluded from accepted evidence and retained separately with failure codes; the prototype withholds its verdict rather than automatically regenerating.
 - No hard dollar budget, distributed rate limiter, production authentication, durable queue, or public-hosting safeguards. Keep it local.
 - No guarantee of exhaustive searches, complete claim extraction, or factual accuracy.
 
@@ -173,3 +173,11 @@ python3 scripts/dev.py
 ```
 
 The launcher checks installed dependencies and ports 8000/5173, then waits for both servers to respond before printing the app link. If startup fails or either server exits, it stops the other server. It only stops processes it started; it never kills a process occupying a port. A busy port may mean the app is already running. It does not install packages, read API keys, or make external requests. Existing live-mode settings remain in effect for any fact-checks you submit in the app.
+
+## Citation failure diagnostics
+
+Reports now retain `rejected_citations` separately from accepted `evidence`. The UI labels them **Excluded citations — not evidence**, and hides the unverified proposal under a disclosure. JSON export includes the proposal, reason, and a stable failure code: `unknown_source`, `empty_quote`, `quote_not_found`, `attribution_rejected`, or `check_unavailable`. Successful checks use `verified`; demo fixtures remain `not_checked`.
+
+Retrieved citations include a retrieval timestamp and SHA-256 fingerprint of the exact extracted text supplied to validation. A fingerprint identifies that text but cannot reconstruct it, prove its accuracy, or guarantee the page will remain unchanged. Full page bodies are not included in the report.
+
+If one semantic citation check fails as a provider operation, prior successful evidence is preserved. The claim remains incomplete and UNVERIFIABLE. Rejected citations never contribute to a verdict. Reports produced before these diagnostics cannot recover discarded citation proposals retroactively. The first Moon-orbit test is such a report, so its precise rejection reason remains unknown.

@@ -112,3 +112,50 @@ def test_mixed_dns_blocked(monkeypatch):
         with pytest.raises(ValueError):
             await PublicResolver().resolve('example.org', 443)
     asyncio.run(scenario())
+
+@pytest.mark.parametrize('draft,code', [
+    (DRAFT.model_copy(update={'source_id': 'invented'}), 'unknown_source'),
+    (DRAFT.model_copy(update={'quote': 'Absent quote'}), 'quote_not_found'),
+    (DRAFT.model_copy(update={'quote': '  '}), 'empty_quote'),
+])
+def test_rejected_citations_are_auditable(draft, code):
+    result = asyncio.run(research_claim(CLAIM, FakeProvider(draft=draft), fake_fetch))
+    rejected = result.rejected_citations[0]
+    assert rejected.verification_code == code
+    assert rejected.quote == draft.quote
+    assert not rejected.verified and result.evidence == []
+    assert result.verdict == 'UNVERIFIABLE'
+    if code == 'unknown_source':
+        assert rejected.url is None and rejected.source_text_sha256 is None
+    else:
+        assert rejected.retrieved_at
+        assert len(rejected.source_text_sha256) == 64
+
+
+def test_semantic_failure_is_distinct_from_quote_mismatch():
+    result = asyncio.run(research_claim(CLAIM, FakeProvider(approved=False), fake_fetch))
+    assert result.rejected_citations[0].verification_code == 'attribution_rejected'
+
+
+def test_failed_verifier_preserves_previous_evidence():
+    class FailingVerifier(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is Analysis:
+                return Analysis(verdict='TRUE', evidence=[DRAFT, DRAFT], limitations=[])
+            if schema is CitationJudgment and self.verifier_calls:
+                raise ProviderFailure('sensitive provider error must not be exposed')
+            return await super().structured(schema, instructions, data)
+    result = asyncio.run(research_claim(CLAIM, FailingVerifier(), fake_fetch))
+    assert result.verdict == 'UNVERIFIABLE' and result.status == 'incomplete'
+    assert len(result.evidence) == len(result.rejected_citations) == 1
+    assert result.rejected_citations[0].verification_code == 'check_unavailable'
+    assert 'sensitive provider error' not in result.model_dump_json()
+
+
+def test_verified_citation_has_retrieval_fingerprint():
+    import hashlib
+    result = asyncio.run(research_claim(CLAIM, FakeProvider(), fake_fetch))
+    citation = result.evidence[0]
+    assert citation.verification_code == 'verified'
+    assert citation.source_text_sha256 == hashlib.sha256(PAGE.encode()).hexdigest()
+    assert result.rejected_citations == []

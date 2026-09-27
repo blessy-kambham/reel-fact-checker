@@ -49,12 +49,16 @@ class Citation(EvidenceDraft):
     url: str | None
     verified: bool
     verification: str
+    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable'] = 'not_checked'
+    retrieved_at: str | None = None
+    source_text_sha256: str | None = None
 
 class ClaimResult(StrictModel):
     claim: str
     verdict: Verdict
     status: Literal['complete', 'incomplete']
     evidence: list[Citation]
+    rejected_citations: list[Citation] = Field(default_factory=list)
     limitations: list[str]
     supporting_search: str
     contradicting_search: str

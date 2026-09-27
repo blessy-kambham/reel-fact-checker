@@ -32,6 +32,21 @@ export default function Report({ report }) {
       <p className="report-meta">{claim.sources_checked} pages retrieved · Confidence is not calibrated</p>
       <div className="evidence-grid">{claim.evidence.map((item, i) => <Evidence key={i} item={item} demo={report.mode === 'demo'} />)}</div>
       {!claim.evidence.length && <p>No verified evidence is available for this claim.</p>}
+      {claim.rejected_citations?.length > 0 && <details className="rejected-citations">
+        <summary>Excluded citations ({claim.rejected_citations.length}) — not evidence</summary>
+        <p>These proposed citations failed validation and were not used to support the verdict. Their text may be inaccurate.</p>
+        {claim.rejected_citations.map((item, i) => <article className="evidence" key={i}>
+          <strong>{item.title}</strong>
+          <p><strong>Why excluded:</strong> {item.verification}</p>
+          <p className="verification">Check: {item.verification_code?.replaceAll('_', ' ') || 'Unverified'}</p>
+          <details><summary>Inspect the unverified proposal</summary>
+            <p><strong>Unverified statement:</strong> {item.statement}</p>
+            <blockquote>{item.quote}</blockquote>
+            {item.url?.startsWith('https://') && <a href={item.url} target="_blank" rel="noopener noreferrer">Inspect source ↗</a>}
+            {item.retrieved_at && <p className="verification">Retrieved: {new Date(item.retrieved_at).toLocaleString()}</p>}
+          </details>
+        </article>)}
+      </details>}
       <details><summary>Research coverage & limitations</summary><p><strong>Supporting search:</strong> {claim.supporting_search}</p><p><strong>Contradicting search:</strong> {claim.contradicting_search}</p><ul>{claim.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
     </article>)}
     <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul><p>Reports remain in this tab until you clear or reload it. Download a copy to keep it.</p></aside>

@@ -1,6 +1,7 @@
 """Extract → parallel research → analysis → independent citation check."""
 import asyncio
 import json
+import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -26,18 +27,27 @@ async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
     source = sources.get(draft.source_id)
     if source is None:
         return Citation(**draft.model_dump(), title='Unknown source', url=None, verified=False,
-                        verification='Rejected: source was not retrieved in this run.')
+                        verification='Rejected: source was not retrieved in this run.', verification_code='unknown_source')
     verified = False
-    reason = 'Rejected: quote was not found in the retrieved page.'
     quote = normalized(draft.quote)
+    code = 'quote_not_found' if quote else 'empty_quote'
+    reason = 'Rejected: quote was not found in the retrieved page.' if quote else 'Rejected: quote is empty after whitespace normalization.'
     if quote and quote in normalized(source.text):
-        judgment = await provider.structured(CitationJudgment,
-            'Determine whether the supplied page actually supports the attributed statement and whether the quote is used in context. '
-            'Also check that the assigned FOR/AGAINST/CONTEXT stance accurately describes its relationship to the original claim. Reject cherry-picked, contradictory, or ambiguous attributions. This is a separate citation check, not a truth guarantee.',
-            json.dumps({'claim': claim_text, 'stance': draft.stance, 'statement': draft.statement, 'quote': draft.quote, 'page': source.text}))
-        verified = judgment.supports_attribution
-        reason = judgment.reason
-    return Citation(**draft.model_dump(), title=source.title, url=source.url, verified=verified, verification=reason)
+        try:
+            judgment = await provider.structured(CitationJudgment,
+                'Determine whether the supplied page actually supports the attributed statement and whether the quote is used in context. '
+                'Also check that the assigned FOR/AGAINST/CONTEXT stance accurately describes its relationship to the original claim. Reject cherry-picked, contradictory, or ambiguous attributions. This is a separate citation check, not a truth guarantee.',
+                json.dumps({'claim': claim_text, 'stance': draft.stance, 'statement': draft.statement, 'quote': draft.quote, 'page': source.text}))
+            verified = judgment.supports_attribution
+            code = 'verified' if verified else 'attribution_rejected'
+            reason = judgment.reason
+        except (ProviderFailure, asyncio.TimeoutError):
+            # Keep prior verified evidence; do not copy provider exception bodies into reports.
+            code = 'check_unavailable'
+            reason = 'The attribution check could not complete. This citation was not verified.'
+    return Citation(**draft.model_dump(), title=source.title, url=source.url, verified=verified,
+                    verification=reason, verification_code=code, retrieved_at=source.retrieved_at,
+                    source_text_sha256=hashlib.sha256(source.text.encode('utf-8')).hexdigest())
 
 
 async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
@@ -102,7 +112,7 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
     warnings.append('Citation checks use quote matching and a separate model judgment; human review may still find errors.')
     warnings.append('Source independence, publication dates, and methodology require review; no calibrated confidence score is available.')
     return ClaimResult(claim=claim.text, verdict=verdict, status='incomplete' if failed or 'Failed' in search_status.values() else 'complete',
-                       evidence=usable, limitations=list(dict.fromkeys(warnings + analysis.limitations)),
+                       evidence=usable, rejected_citations=[c for c in citations if not c.verified], limitations=list(dict.fromkeys(warnings + analysis.limitations)),
                        supporting_search=search_status['FOR'], contradicting_search=search_status['AGAINST'], sources_checked=len(sources))
 
 
