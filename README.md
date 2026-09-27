@@ -187,3 +187,9 @@ If one semantic citation check fails as a provider operation, prior successful e
 The **Project checks** workflow runs on pushes and pull requests, and can also be started from the repository's Actions tab. It installs locked dependencies, runs the backend tests and offline evaluation on Python 3.10, and builds the frontend on Node 22. Both jobs have a ten-minute timeout and read-only repository permissions.
 
 No API secrets are supplied to these jobs, and live research is disabled. Dependency installation needs internet access; the checks do not request paid model or search services. A passing workflow verifies these engineering checks, not factual accuracy. See `.github/workflows/checks.yml` for the commands.
+
+## Print or save a readable report
+
+Open any demo or research report and choose **Print / Save PDF**. In your browser's print dialog, select a printer or **Save as PDF**. This runs locally and makes no model or search requests.
+
+The print layout removes the input form and buttons, includes the report ID and source URLs, and expands coverage, limitations, and excluded-citation disclosures. Excluded citations keep their warning labels. Closing the print dialog restores the previous disclosure state. JSON export remains available for the full structured record.

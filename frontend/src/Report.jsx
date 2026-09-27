@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
 function Evidence({ item, demo }) {
   return <article className="evidence">
@@ -11,6 +11,28 @@ function Evidence({ item, demo }) {
 }
 
 export default function Report({ report }) {
+  const reportElement = useRef(null);
+  useEffect(() => {
+    let closedDetails = [];
+    function preparePrint() {
+      // Browser menu printing should include the same disclosures as the button.
+      closedDetails = [...reportElement.current.querySelectorAll('details:not([open])')];
+      closedDetails.forEach(element => { element.open = true; });
+      document.body.classList.add('printing-report');
+    }
+    function restoreScreen() {
+      closedDetails.forEach(element => { element.open = false; });
+      closedDetails = [];
+      document.body.classList.remove('printing-report');
+    }
+    window.addEventListener('beforeprint', preparePrint);
+    window.addEventListener('afterprint', restoreScreen);
+    return () => {
+      window.removeEventListener('beforeprint', preparePrint);
+      window.removeEventListener('afterprint', restoreScreen);
+      restoreScreen();
+    };
+  }, []);
   function download() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a');
@@ -19,10 +41,10 @@ export default function Report({ report }) {
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return <section className="report" aria-label="Fact-check report">
-    <div className="card-heading"><p className="eyebrow">{report.mode === 'demo' ? 'FICTIONAL DEMO REPORT' : 'RESEARCH REPORT'}</p><button className="small-button" onClick={download}>Download JSON</button></div>
+  return <section ref={reportElement} className="report" aria-label="Fact-check report">
+    <div className="card-heading"><p className="eyebrow">{report.mode === 'demo' ? 'FICTIONAL DEMO REPORT' : 'RESEARCH REPORT'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button></div></div>
     <h2>{report.mode === 'demo' ? 'See how evidence changes the story.' : 'Your claim-by-claim report'}</h2>
-    <p className="notice">{report.note}</p>
+    <p className="report-meta">Report ID: {report.id}</p><p className="notice">{report.note}</p>
     <p className="report-meta">{new Date(report.created_at).toLocaleString()} · {report.claims.length} claims · {report.usage.search_calls} searches · {report.usage.model_calls} model calls</p>
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}
     {report.claims.map((claim, index) => <article className="claim-result" key={index}>
@@ -49,6 +71,6 @@ export default function Report({ report }) {
       </details>}
       <details><summary>Research coverage & limitations</summary><p><strong>Supporting search:</strong> {claim.supporting_search}</p><p><strong>Contradicting search:</strong> {claim.contradicting_search}</p><ul>{claim.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
     </article>)}
-    <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul><p>Reports remain in this tab until you clear or reload it. Download a copy to keep it.</p></aside>
+    <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul><p className="screen-only">Reports remain in this tab until you clear or reload it. Download JSON or choose Print / Save PDF to keep a copy.</p></aside>
   </section>;
 }
