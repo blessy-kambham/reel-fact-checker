@@ -1,0 +1,26 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+node_modules/
+dist/
+.DS_Store
+
+# Local caches, test output, and generated artifacts
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+*.log
+*.tsbuildinfo
+/report-preview.png
+/stage1-browser.png
+# Local credentials
+*.pem
+*.key
