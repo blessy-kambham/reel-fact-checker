@@ -181,3 +181,9 @@ Reports now retain `rejected_citations` separately from accepted `evidence`. The
 Retrieved citations include a retrieval timestamp and SHA-256 fingerprint of the exact extracted text supplied to validation. A fingerprint identifies that text but cannot reconstruct it, prove its accuracy, or guarantee the page will remain unchanged. Full page bodies are not included in the report.
 
 If one semantic citation check fails as a provider operation, prior successful evidence is preserved. The claim remains incomplete and UNVERIFIABLE. Rejected citations never contribute to a verdict. Reports produced before these diagnostics cannot recover discarded citation proposals retroactively. The first Moon-orbit test is such a report, so its precise rejection reason remains unknown.
+
+## Automatic GitHub checks
+
+The **Project checks** workflow runs on pushes and pull requests, and can also be started from the repository's Actions tab. It installs locked dependencies, runs the backend tests and offline evaluation on Python 3.10, and builds the frontend on Node 22. Both jobs have a ten-minute timeout and read-only repository permissions.
+
+No API secrets are supplied to these jobs, and live research is disabled. Dependency installation needs internet access; the checks do not request paid model or search services. A passing workflow verifies these engineering checks, not factual accuracy. See `.github/workflows/checks.yml` for the commands.
