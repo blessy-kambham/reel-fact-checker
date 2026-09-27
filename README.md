@@ -6,7 +6,7 @@
 
 ## Start here — no accounts or purchases
 
-Open the project folder in VS Code. Open **Terminal → Run Task**, then run **Backend: start** and **Frontend: start** in separate terminals. If the servers are already running, just open http://127.0.0.1:5173.
+Open the project folder in VS Code. Open **Terminal → Run Task**, then choose **App: start both servers**. This starts both servers in one terminal; press **Control+C** there to stop both. Use **Setup: check** to check dependencies and ports without starting anything. If the servers are already running, just open http://127.0.0.1:5173.
 
 Click **Explore the free demo**. Its claim, town, numbers, and excerpts are fictional fixtures. It makes zero model or search requests and does not assess text you enter. A demo label appears on the report and example verdict. You can download its JSON.
 
@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-45 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+49 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -162,3 +162,14 @@ The runner checks 12 versioned fictional cases from `backend/evaluation/cases.js
 The cases cover supported evidence, unknown source IDs, fabricated/blank quotes, misattribution, unavailable pages, search outages, failure to research contradictions, a FALSE candidate without contradicting evidence, conflicting evidence, context-only evidence, and mixed valid/invalid citations.
 
 **These are policy regression tests, not fact-check accuracy scores.** Sources, analyst responses, and semantic citation judgments are scripted. The suite runs the application's research and citation validation logic with injected offline providers. It does not measure whether a real model extracts claims correctly, finds good sources, or makes accurate semantic judgments. The pytest wrapper blocks network connections. No API keys are loaded, and no credits are spent.
+
+## Start both servers from a terminal
+
+From the project root on macOS/Linux:
+
+```sh
+python3 scripts/dev.py --check
+python3 scripts/dev.py
+```
+
+The launcher checks installed dependencies and ports 8000/5173, then waits for both servers to respond before printing the app link. If startup fails or either server exits, it stops the other server. It only stops processes it started; it never kills a process occupying a port. A busy port may mean the app is already running. It does not install packages, read API keys, or make external requests. Existing live-mode settings remain in effect for any fact-checks you submit in the app.

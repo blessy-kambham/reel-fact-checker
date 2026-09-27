@@ -2,6 +2,38 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "App: start both servers",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "scripts/dev.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "Setup: check",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "scripts/dev.py",
+        "--check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Backend: start",
       "type": "shell",
       "command": "./.venv/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
