@@ -23,6 +23,8 @@ Click **Explore the free demo**. Its claim, town, numbers, and excerpts are fict
 - Partial claim results on model/search failures, time limits, report limitations, token/call counts.
 - Claim-by-claim web report, source links, evidence panels, and JSON export.
 - Explicit provider configuration status; live mode is off by default.
+- Offline evaluation runner with 12 fictional policy regression cases; no keys or network required.
+- Blank quotes are rejected; unqualified TRUE/FALSE verdicts are withheld when verified evidence is divided.
 
 No confidence percentage is fabricated. Quote presence does not prove truth; model-based attribution checks can still be wrong.
 
@@ -115,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-33 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+45 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -134,7 +136,7 @@ This is engineering regression coverage, not an accuracy benchmark. We still nee
 ## Next increments
 
 1. Configure providers together and validate a small set of live text claims.
-2. Add an offline labeled evaluation set and stronger source-quality checks.
+2. Evaluate live claims against professional fact-check references and strengthen source-quality checks.
 3. Persist submissions and evidence in PostgreSQL.
 4. Add video transcription and visible-text extraction.
 5. Deploy only after evaluation and operational safeguards; integrate Instagram afterward.
@@ -146,3 +148,17 @@ The development branch is `main`. Local secrets, virtual environments, dependenc
 ## Implementation references
 
 [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [Tavily Search API](https://docs.tavily.com/documentation/api-reference/endpoint/search), [FastAPI](https://fastapi.tiangolo.com/tutorial/first-steps/), [Vite](https://vite.dev/guide/).
+
+## Free offline evaluation
+
+In VS Code, run **Terminal → Run Task → Evaluation: offline**, or run from `backend`:
+
+```sh
+.venv/bin/python -m evaluation.run --output evaluation/results/latest.json
+```
+
+The runner checks 12 versioned fictional cases from `backend/evaluation/cases.json`. It reports expected vs actual verdicts and citation counts, and exits nonzero on a failed case. Generated reports are ignored by Git.
+
+The cases cover supported evidence, unknown source IDs, fabricated/blank quotes, misattribution, unavailable pages, search outages, failure to research contradictions, a FALSE candidate without contradicting evidence, conflicting evidence, context-only evidence, and mixed valid/invalid citations.
+
+**These are policy regression tests, not fact-check accuracy scores.** Sources, analyst responses, and semantic citation judgments are scripted. The suite runs the application's research and citation validation logic with injected offline providers. It does not measure whether a real model extracts claims correctly, finds good sources, or makes accurate semantic judgments. The pytest wrapper blocks network connections. No API keys are loaded, and no credits are spent.

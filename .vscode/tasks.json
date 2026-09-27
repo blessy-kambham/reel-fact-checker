@@ -1,8 +1,41 @@
 {
   "version": "2.0.0",
   "tasks": [
-    {"label": "Backend: start", "type": "shell", "command": "./.venv/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000", "options": {"cwd": "${workspaceFolder}/backend"}, "problemMatcher": []},
-    {"label": "Frontend: start", "type": "shell", "command": "npm run dev", "options": {"cwd": "${workspaceFolder}/frontend"}, "problemMatcher": []},
-    {"label": "Tests: backend", "type": "shell", "command": "./.venv/bin/python -m pytest -q", "options": {"cwd": "${workspaceFolder}/backend"}, "problemMatcher": []}
+    {
+      "label": "Backend: start",
+      "type": "shell",
+      "command": "./.venv/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: start",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests: backend",
+      "type": "shell",
+      "command": "./.venv/bin/python -m pytest -q",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Evaluation: offline",
+      "type": "shell",
+      "command": "./.venv/bin/python -m evaluation.run --output evaluation/results/latest.json",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    }
   ]
 }

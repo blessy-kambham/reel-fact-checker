@@ -29,7 +29,8 @@ async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
                         verification='Rejected: source was not retrieved in this run.')
     verified = False
     reason = 'Rejected: quote was not found in the retrieved page.'
-    if normalized(draft.quote) in normalized(source.text):
+    quote = normalized(draft.quote)
+    if quote and quote in normalized(source.text):
         judgment = await provider.structured(CitationJudgment,
             'Determine whether the supplied page actually supports the attributed statement and whether the quote is used in context. '
             'Also check that the assigned FOR/AGAINST/CONTEXT stance accurately describes its relationship to the original claim. Reject cherry-picked, contradictory, or ambiguous attributions. This is a separate citation check, not a truth guarantee.',
@@ -92,6 +93,10 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
         verdict = 'UNVERIFIABLE'
     if verdict == 'FALSE' and not any(c.stance == 'AGAINST' for c in usable):
         verdict = 'UNVERIFIABLE'
+    stances = {citation.stance for citation in usable}
+    if verdict in ('TRUE', 'FALSE') and {'FOR', 'AGAINST'} <= stances:
+        verdict = 'UNVERIFIABLE'
+        warnings.append('Verified evidence supports and contradicts the claim. An unqualified verdict was withheld pending review.')
     if not any(c.stance == 'AGAINST' for c in usable):
         warnings.append('No verified contradicting evidence was identified in the retrieved pages. This does not prove the claim.')
     warnings.append('Citation checks use quote matching and a separate model judgment; human review may still find errors.')

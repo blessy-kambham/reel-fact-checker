@@ -24,3 +24,6 @@ coverage/
 # Local credentials
 *.pem
 *.key
+
+# Generated offline evaluation reports
+/backend/evaluation/results/

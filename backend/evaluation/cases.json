@@ -1,0 +1,356 @@
+[
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "TRUE",
+      "evidence_count": 1
+    },
+    "id": "supported_claim",
+    "purpose": "Preserve a supported candidate after quote and scripted attribution checks."
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "FAKE",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 0
+    },
+    "id": "unknown_source_id",
+    "purpose": "Reject model-invented source IDs.",
+    "expected_judgment_calls": 0
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "A fabricated result.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 0
+    },
+    "id": "fabricated_quote",
+    "purpose": "Reject a quote absent from the retrieved source.",
+    "expected_judgment_calls": 0
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "   ",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 0
+    },
+    "id": "blank_quote",
+    "purpose": "Whitespace must not pass the substring check as an empty quote.",
+    "expected_judgment_calls": 0
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 0
+    },
+    "id": "misattributed_quote",
+    "purpose": "An existing quote is insufficient when semantic attribution fails.",
+    "rejected_statements": [
+      "The fictional room A result was 12 units."
+    ]
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source.",
+        "unavailable": true
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 0
+    },
+    "id": "missing_pages",
+    "purpose": "Inaccessible pages must not be replaced with search snippets."
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 0
+    },
+    "id": "search_outage",
+    "purpose": "Fail transparently when both research directions fail.",
+    "failed_searches": [
+      1,
+      2
+    ]
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 1
+    },
+    "id": "contradicting_search_failed",
+    "purpose": "Do not return TRUE when only supporting research succeeded.",
+    "failed_searches": [
+      2
+    ]
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "FALSE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 1
+    },
+    "id": "false_without_contradiction",
+    "purpose": "A FALSE candidate cannot rely only on supporting evidence."
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      },
+      {
+        "url": "https://example.net/sensor-b",
+        "text": "An independent fictional sensor recorded 9 units in room A."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        },
+        {
+          "source_id": "S2",
+          "quote": "An independent fictional sensor recorded 9 units in room A.",
+          "statement": "The other fictional measurement disagrees with the claim.",
+          "stance": "AGAINST"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 2
+    },
+    "id": "conflicting_evidence",
+    "purpose": "Withhold an unqualified TRUE verdict when verified evidence is divided."
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "CONTEXT"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 1
+    },
+    "id": "context_only",
+    "purpose": "Context without directly supporting or contradicting evidence is insufficient."
+  },
+  {
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "evidence": [
+        {
+          "source_id": "S1",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        },
+        {
+          "source_id": "FAKE",
+          "quote": "The fictional sensor recorded 12 units in room A.",
+          "statement": "The fictional room A result was 12 units.",
+          "stance": "FOR"
+        }
+      ],
+      "limitations": []
+    },
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 1
+    },
+    "id": "mixed_valid_invalid_citations",
+    "purpose": "Keep usable evidence visible while withholding a verdict if another citation fails."
+  }
+]
