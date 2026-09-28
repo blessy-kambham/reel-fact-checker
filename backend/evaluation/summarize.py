@@ -15,11 +15,12 @@ def summarize(traces, cases):
         accepted = [c for claim in claims for c in claim['evidence']]
         rejected = [c for claim in claims for c in claim.get('rejected_citations', [])]
         final = claims[0]['verdict'] if len(claims) == 1 else None
-        rows.append({'claim': submitted, 'http_status': trace.get('http_status'),
+        coverage_failed = report.get('coverage_status') in ('incomplete', 'unavailable') or report.get('omitted_claims', False)
+        rows.append({'coverage_failed': coverage_failed, 'blocked_calls': len(trace.get('blocked', [])), 'claim': submitted, 'http_status': trace.get('http_status'),
             'reference_verdict': case['reference_verdict'] if case else None,
             'final_verdict': final,
             'agreement': final == case['reference_verdict'] if case and final else False,
-            'incomplete': not claims or any(c['status'] != 'complete' for c in claims),
+            'incomplete': coverage_failed or not claims or any(c['status'] != 'complete' for c in claims),
             'accepted_citations': len(accepted), 'rejected_citations': len(rejected),
             'unsupported_citations': sum(c.get('verification_code') in ('unknown_source','unknown_excerpt','empty_quote','quote_not_found','attribution_rejected') for c in rejected),
             'extraction_failure': not any(m.get('stage') == 'Extraction' and m.get('output') for m in trace.get('model', [])),
@@ -31,6 +32,8 @@ def summarize(traces, cases):
     scored = [r for r in rows if r['reference_verdict']]
     return {'cases_attempted':len(rows), 'cases_scored':len(scored),
         'verdict_agreement':sum(r['agreement'] for r in scored)/len(scored) if scored else None,
+        'coverage_failures':sum(r['coverage_failed'] for r in rows),
+        'blocked_calls':sum(r['blocked_calls'] for r in rows),
         'incomplete_cases':sum(r['incomplete'] for r in rows),
         'citation_acceptance_rate':accepted/total if total else None,
         'unsupported_citation_count':sum(r['unsupported_citations'] for r in rows),

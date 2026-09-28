@@ -3,6 +3,7 @@ Uses the real /fact-check route with a shared conservative $0.10 model allowance
 Generated traces stay local. Never enable this server on a public interface.
 """
 import argparse
+import asyncio
 import json
 import os
 import time
@@ -15,27 +16,49 @@ from services.providers import Providers, ProviderFailure
 RESULTS = Path(__file__).with_name('results')
 
 class Budget:
-    def __init__(self, ledger=None):
+    def __init__(self, ledger=None, search_limit=12):
         self.ledger = ledger
         self.reserved = Decimal('0')
         self.searches = 0
+        self.search_limit = search_limit
+        self.stopped = False
         if ledger and ledger.exists():
             state = json.loads(ledger.read_text())
             self.reserved = Decimal(state['reserved'])
             self.searches = state['searches']
+            self.search_limit = min(search_limit, state.get('search_limit', search_limit))
+            self.stopped = state.get('stopped', False)
 
     def save(self):
         if self.ledger:
             self.ledger.parent.mkdir(exist_ok=True)
             temp = self.ledger.with_suffix('.tmp')
-            temp.write_text(json.dumps({'reserved':str(self.reserved),'searches':self.searches}))
+            temp.write_text(json.dumps({'reserved':str(self.reserved),'searches':self.searches,'search_limit':self.search_limit,'stopped':self.stopped}))
             temp.replace(self.ledger)
 
+    def ensure_active(self):
+        if self.stopped:
+            raise ProviderFailure('Validation budget stopped; no further external call was made.')
+
+    def stop(self):
+        self.stopped = True
+        self.save()
+
+    def reserve_search(self):
+        self.ensure_active()
+        if self.searches >= self.search_limit:
+            self.stop()
+            raise ProviderFailure('Validation search limit reached; no search was made.')
+        self.searches += 1
+        self.save()
+
     def reserve(self, instructions, data, schema):
+        self.ensure_active()
         # Conservative byte bound plus protocol overhead. Failed calls retain their reservation.
         tokens = len(json.dumps([instructions, data, schema.model_json_schema()], ensure_ascii=True).encode()) + 10000
         cost = Decimal(tokens) * Decimal('0.0000004') + Decimal(3000) * Decimal('0.0000016')
         if self.reserved + cost > Decimal('0.10'):
+            self.stop()
             raise ProviderFailure('Validation budget exhausted; no further model call was made.')
         self.reserved += cost
         self.save()
@@ -46,9 +69,19 @@ class AuditProvider(Providers):
         self.client = AsyncOpenAI(api_key=os.environ['OPENAI_API_KEY'], timeout=40, max_retries=0)
         self.usage = dict(input_tokens=0, output_tokens=0, model_calls=0, search_calls=0)
         self.budget, self.trace = budget, trace
+        self.model_lock = asyncio.Lock()
 
     async def structured(self, schema, instructions, data):
-        reservation = self.budget.reserve(instructions, data, schema)
+        # Serialize validation model calls so usage deltas cannot overlap.
+        async with self.model_lock:
+            return await self._structured(schema, instructions, data)
+
+    async def _structured(self, schema, instructions, data):
+        try:
+            reservation = self.budget.reserve(instructions, data, schema)
+        except ProviderFailure:
+            self.trace.setdefault('blocked', []).append({'stage': schema.__name__, 'reason': 'budget_stopped'})
+            raise
         before = dict(self.usage)
         record = {'stage': schema.__name__, 'input': json.loads(data) if schema.__name__ != 'Extraction' else data}
         self.trace['model'].append(record)
@@ -65,10 +98,11 @@ class AuditProvider(Providers):
             raise
 
     async def search(self, query):
-        if self.budget.searches >= 12:
-            raise ProviderFailure('Validation search limit reached; no search was made.')
-        self.budget.searches += 1
-        self.budget.save()
+        try:
+            self.budget.reserve_search()
+        except ProviderFailure:
+            self.trace.setdefault('blocked', []).append({'stage': 'search', 'reason': 'budget_stopped'})
+            raise
         record = {'query': query}
         self.trace['searches'].append(record)
         try:

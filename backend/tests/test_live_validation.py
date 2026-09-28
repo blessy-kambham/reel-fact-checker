@@ -125,3 +125,35 @@ def test_budget_reservation_survives_restart(tmp_path):
     resumed = Budget(ledger)
     assert resumed.reserved == first.reserved
     assert resumed.searches == 12
+
+
+def test_budget_stop_is_persistent_and_blocks_smaller_calls_and_searches(tmp_path):
+    path = tmp_path / 'budget.json'
+    budget = Budget(path, search_limit=8)
+    with pytest.raises(ProviderFailure):
+        budget.reserve('test', 'x' * 300000, Extraction)
+    resumed = Budget(path)
+    assert resumed.stopped and resumed.search_limit == 8
+    with pytest.raises(ProviderFailure):
+        resumed.reserve('test', 'small', Extraction)
+    with pytest.raises(ProviderFailure):
+        resumed.reserve_search()
+    assert resumed.searches == 0 and resumed.reserved == 0
+
+
+def test_search_cap_stops_model_calls():
+    budget = Budget(search_limit=1)
+    budget.reserve_search()
+    with pytest.raises(ProviderFailure):
+        budget.reserve_search()
+    with pytest.raises(ProviderFailure):
+        budget.reserve('test', 'claim', Extraction)
+    assert budget.searches == 1
+
+
+def test_summary_records_coverage_and_budget_blocks():
+    result = summarize([{'response': {'coverage_status': 'incomplete', 'claims': []},
+                         'blocked': [{'stage': 'ExtractionCoverage'}]}], [])
+    assert result['coverage_failures'] == 1
+    assert result['blocked_calls'] == 1
+    assert result['incomplete_cases'] == 1
