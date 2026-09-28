@@ -123,6 +123,8 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
         'Read surrounding excerpts for context. If no excerpt supports the statement, omit the statement. '
         'FOR means evidence supporting the ORIGINAL CLAIM, not supporting your proposed verdict. '
         'AGAINST means evidence contradicting the ORIGINAL CLAIM, including evidence supporting a FALSE verdict. '
+        'For example, for the claim that the Moon makes its own light, an excerpt saying it reflects sunlight is AGAINST, even when your verdict is FALSE. '
+        'Do not copy the search direction into stance; search queries can retrieve either kind of evidence. '
         'Use CONTEXT only when the excerpt neither supports nor contradicts the original claim. '
         'Never invent IDs or URLs. Limitations must describe research limitations only, not uncited factual assertions. '
         'Do not assign confidence percentages. Do not mistake the absence of contradictory evidence for proof.',
@@ -160,7 +162,11 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
     extraction = await provider.structured(Extraction,
         'Classify intent and extract at most three atomic factual claims without adding facts. Preserve dates, quantities, '
         'attribution, and qualifiers. Do not treat opinions or fictional content as factual claims. If mixed, extract only '
-        'factual claims and explain exclusions in note. Set omitted_claims if more than three claims exist. '
+        'checkable assertions and explain exclusions in note. Factual means capable of being checked, not known to be true. '
+        'Include false, misleading and uncertain assertions exactly as asserted. Never drop an assertion because you think it is incorrect. '
+        'Split compound assertions, including conclusions after so or therefore. Keep dates attached to the event; do not extract a date as a separate claim. '
+        'For example, same side of the Moon so the other side never gets sunlight contains TWO checkable assertions; preserve both. '
+        'Before returning, compare the extraction with every assertion in the submission. Set omitted_claims if any checkable assertion is missing, including more than three claims. '
         'For nonfactual intent return no claims. Do not determine truth during extraction.', text)
     limiter = asyncio.Semaphore(2)
     async def branch(claim):
@@ -174,6 +180,10 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
     results = await asyncio.gather(*(branch(c) for c in extraction.claims)) if extraction.intent == 'FACTUAL' else []
     limitations = ['At most three claims and six search results per claim are processed in this local MVP.']
     if extraction.omitted_claims:
-        limitations.append('Additional claims were omitted. Submit those separately.')
+        limitations.append('Coverage is incomplete: checkable assertions were omitted. Verdicts are withheld; submit the assertions separately.')
+        results = [result.model_copy(update={
+            'verdict': 'UNVERIFIABLE', 'status': 'incomplete',
+            'limitations': result.limitations + ['Verdict withheld because the submission was not fully covered by extraction.'],
+        }) for result in results]
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
-                  note=extraction.note, claims=results, limitations=limitations, usage=provider.usage)
+                  note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims)

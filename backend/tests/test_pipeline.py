@@ -158,3 +158,40 @@ def test_verified_citation_has_retrieval_fingerprint():
     assert citation.verification_code == 'verified'
     assert citation.source_text_sha256 == hashlib.sha256(PAGE.encode()).hexdigest()
     assert result.rejected_citations == []
+
+
+def test_omitted_false_assertion_withholds_partial_true_result():
+    """Reproduce the live failure: only the true half survives extraction."""
+    class IncompleteExtraction(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is Extraction:
+                return Extraction(intent='FACTUAL', claims=[CLAIM], omitted_claims=True,
+                                  note='Second assertion was excluded as incorrect.')
+            return await super().structured(schema, instructions, data)
+    report = asyncio.run(run_pipeline('The sensor measured 12 units, so it works in every room.',
+                                     IncompleteExtraction(), fake_fetch))
+    assert report.omitted_claims
+    assert report.claims[0].verdict == 'UNVERIFIABLE'
+    assert report.claims[0].status == 'incomplete'
+    assert report.claims[0].evidence[0].verified  # Keep the audit evidence.
+    assert any('Coverage is incomplete' in item for item in report.limitations)
+    assert json.loads(report.model_dump_json())['omitted_claims'] is True
+
+
+def test_stance_mismatch_cannot_be_used_even_with_valid_attribution():
+    class WrongStance(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is CitationJudgment:
+                return CitationJudgment(supports_attribution=True, stance_matches=False,
+                                        reason='Contradiction was incorrectly labeled FOR.')
+            return await super().structured(schema, instructions, data)
+    result = asyncio.run(research_claim(CLAIM, WrongStance(), fake_fetch))
+    assert result.verdict == 'UNVERIFIABLE' and result.status == 'incomplete'
+    assert not result.evidence
+    assert result.rejected_citations[0].verification_code == 'attribution_rejected'
+
+
+def test_complete_extraction_retains_verified_result():
+    report = asyncio.run(run_pipeline(CLAIM.text, FakeProvider(), fake_fetch))
+    assert not report.omitted_claims
+    assert report.claims[0].verdict == 'TRUE'

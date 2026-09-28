@@ -12,26 +12,26 @@ class ClaimRequest(StrictModel):
     claim: Text
 
 class AtomicClaim(StrictModel):
-    text: Text
-    context: str
+    text: Text = Field(description="A checkable assertion as stated, even if false. Preserve negation, dates, quantities, attribution and qualifiers; do not correct it.")
+    context: str = Field(description="Context from the submission only, without adding background knowledge.")
 
 class Extraction(StrictModel):
     intent: Literal['FACTUAL', 'OPINION', 'SATIRE', 'FICTIONAL', 'UNRELATED']
     claims: list[AtomicClaim] = Field(max_length=3)
-    omitted_claims: bool
+    omitted_claims: bool = Field(description="True if any checkable assertion was left out, including when the three-claim limit is exceeded. False assertions must be extracted too.")
     note: str
 
 class EvidenceDraft(StrictModel):
     source_id: str
     quote: str = Field(min_length=1, max_length=400)
     statement: str = Field(min_length=1, max_length=1000)
-    stance: Literal['FOR', 'AGAINST', 'CONTEXT']
+    stance: Literal['FOR', 'AGAINST', 'CONTEXT'] = Field(description='Relationship to the original submitted claim, never to the proposed verdict: FOR supports the claim; AGAINST contradicts it; CONTEXT is relevant background only.')
 
 class EvidenceSelection(StrictModel):
     source_id: str
     excerpt_id: str
     statement: str = Field(min_length=1, max_length=1000)
-    stance: Literal['FOR', 'AGAINST', 'CONTEXT']
+    stance: Literal['FOR', 'AGAINST', 'CONTEXT'] = Field(description='Relationship to the original submitted claim, never to the proposed verdict: FOR supports the claim; AGAINST contradicts it; CONTEXT is relevant background only.')
 
 class Analysis(StrictModel):
     verdict: Verdict
@@ -86,3 +86,4 @@ class Report(StrictModel):
     claims: list[ClaimResult]
     limitations: list[str]
     usage: dict[str, int]
+    omitted_claims: bool = False

@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-96 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+99 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. All 12 starter reference claims have now been attempted across versions. Two of the latest seven were blocked during analysis by the validation budget guard; successful validation remains incomplete. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -256,3 +256,10 @@ The exact saved CONTEXT citation passed a live check. The seven remaining refere
 The exact CONTEXT replay passed. Seven additional requests exposed two important reliability defects: extraction can omit a false assertion, and the analyst can label contradicting evidence FOR. The verifier rejected seven such citation proposals. Water's universal claim returned FALSE (a documented defensible alternative to its starter label), and the Eiffel Tower year returned TRUE. Pluto and private-count analysis were blocked by conservative budget reservations. These are not seven successful fact checks.
 
 The run used 37 successful model calls, 16 Tavily searches, and approximately $0.06633 in OpenAI tokens, within the approved $0.10/16-search allowance. No automatic retries were used. Saved live mode remains off. All 96 offline tests, 12 policy cases, and the frontend build pass. See `docs/TEXT_VALIDATION.md` for the full case table and limitations. The text MVP remains incomplete.
+
+
+### Extraction coverage safeguard
+
+Reports now expose `omitted_claims`. When extraction reports any omitted assertion, the backend withholds all verdicts, keeps verified evidence for inspection, and the frontend displays an incomplete-coverage warning. Extraction instructions explicitly retain false assertions and compound conclusions, and keep dates attached to events. Evidence schema descriptions and analyst examples reinforce stance relative to the original claim. Independent citation verification remains mandatory.
+
+99 offline tests and 12 policy cases pass, and the frontend builds. These changes have not yet been retested with live providers. An omission that the extractor fails to flag can still escape this safeguard; `omitted_claims=false` is not proof of full coverage. Broader coverage validation and live stance reliability remain open.
