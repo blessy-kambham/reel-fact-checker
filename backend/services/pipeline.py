@@ -84,6 +84,11 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
         'Analyze only the supplied pages for the claim. Compare FOR and AGAINST evidence. Use UNVERIFIABLE when evidence is '
         'insufficient, unclear, stale, or not directly relevant. Prefer primary evidence; evaluate author authority, methodology, publication date, and editorial standards. Do not treat multiple copied articles as independent sources. Distinguish correlation from causation, dates and scope. '
         'For every explanatory factual statement return an evidence entry with its exact short quote and supplied source_id. '
+        'Copy each quote as one short contiguous substring of the supplied page, character for character. '
+        'Preserve symbols such as °; never paraphrase, insert ellipses, join separate passages, or introduce control characters. '
+        'FOR means evidence supporting the ORIGINAL CLAIM, not supporting your proposed verdict. '
+        'AGAINST means evidence contradicting the ORIGINAL CLAIM, including evidence supporting a FALSE verdict. '
+        'Use CONTEXT only when the excerpt neither supports nor contradicts the original claim. '
         'Never invent IDs or URLs. Limitations must describe research limitations only, not uncited factual assertions. '
         'Do not assign confidence percentages. Do not mistake the absence of contradictory evidence for proof.',
         json.dumps({'claim': claim.model_dump(), 'sources': [s.model_dump() for s in sources.values()]}))

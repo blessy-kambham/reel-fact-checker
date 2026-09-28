@@ -1,0 +1,142 @@
+[
+  {
+    "id": "moon",
+    "claim": "The Moon orbits Earth.",
+    "reference_verdict": "TRUE",
+    "reference_sources": [
+      "https://science.nasa.gov/moon/facts/"
+    ],
+    "rationale": "NASA describes the Moon orbiting Earth.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "freezing",
+    "claim": "Water freezes at 0 degrees Celsius at standard atmospheric pressure.",
+    "reference_verdict": "TRUE",
+    "reference_sources": [
+      "https://water.usgs.gov/gotita/waterproperties.html"
+    ],
+    "rationale": "Conventional freezing point of pure water; impurities and supercooling need context.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "eiffel",
+    "claim": "The Eiffel Tower is located in Paris.",
+    "reference_verdict": "TRUE",
+    "reference_sources": [
+      "https://www.toureiffel.paris/en/the-monument/universal-exhibition"
+    ],
+    "rationale": "The official operator identifies the Paris exhibition and tower.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "wall",
+    "claim": "The Great Wall of China is visible from the Moon with the naked eye.",
+    "reference_verdict": "FALSE",
+    "reference_sources": [
+      "https://www.nasa.gov/image-article/great-wall/"
+    ],
+    "rationale": "NASA explicitly rejects the Moon visibility myth.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "unknown",
+    "claim": "Exactly 123 people worldwide dreamed about the Eiffel Tower last night.",
+    "reference_verdict": "UNVERIFIABLE",
+    "reference_sources": [],
+    "rationale": "No defined global measurement or publicly auditable evidence; absence of evidence does not imply false.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "moon_light",
+    "claim": "The Moon produces its own visible light like the Sun.",
+    "reference_verdict": "FALSE",
+    "reference_sources": [
+      "https://science.nasa.gov/moon/facts/"
+    ],
+    "rationale": "Moonlight is reflected sunlight.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "moon_rotation",
+    "claim": "The Moon never rotates.",
+    "reference_verdict": "FALSE",
+    "reference_sources": [
+      "https://science.nasa.gov/moon/facts/"
+    ],
+    "rationale": "Synchronous rotation explains why the same side faces Earth.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "moon_surface",
+    "claim": "We see the same side of the Moon, so the other side never receives sunlight.",
+    "reference_verdict": "MISLEADING",
+    "reference_sources": [
+      "https://science.nasa.gov/moon/facts/"
+    ],
+    "rationale": "Same near side does not imply a permanently unlit far side. Review compound-claim extraction separately.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "water_general",
+    "claim": "Water freezes at 0 degrees Celsius under every condition.",
+    "reference_verdict": "PARTIALLY TRUE",
+    "reference_sources": [
+      "https://water.usgs.gov/gotita/waterproperties.html"
+    ],
+    "rationale": "The conventional value needs composition and pressure qualifications; FALSE is a defensible strict reading of every condition.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "pluto",
+    "claim": "The current IAU classification lists Pluto as the ninth planet.",
+    "reference_verdict": "OUTDATED",
+    "reference_sources": [
+      "https://iauarchive.eso.org/news/pressreleases/detail/iau0603/"
+    ],
+    "rationale": "The 2006 resolution classified Pluto as a dwarf planet; FALSE is also defensible for current wording.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "tower_year",
+    "claim": "The Eiffel Tower was built for the 1889 Paris World\u2019s Fair.",
+    "reference_verdict": "TRUE",
+    "reference_sources": [
+      "https://www.toureiffel.paris/en/the-monument/universal-exhibition"
+    ],
+    "rationale": "Official operator dates the exhibition to 1889.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  },
+  {
+    "id": "private_count",
+    "claim": "An unspecified visitor secretly counted exactly 777 steps at the Eiffel Tower yesterday.",
+    "reference_verdict": "UNVERIFIABLE",
+    "reference_sources": [],
+    "rationale": "The person, record, and observation are unspecified; this cannot be established from public research.",
+    "reference_checked": "2026-09-27",
+    "review_status": "starter label; human review recommended",
+    "scoring_note": "Exact-label agreement only; contextual labels may have defensible alternatives."
+  }
+]

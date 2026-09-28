@@ -2,7 +2,7 @@
 
 **In progress:** an AI fact-checking portfolio project built with React and FastAPI. The current stage supports text input, a fictional demo, and an opt-in research pipeline. Video/Reels input and Instagram integration are planned, not implemented.
 
-**Current milestone: a free fictional walkthrough and an implemented, opt-in text research pipeline. One capped text smoke test reached both live providers; its report was incomplete after a citation failed validation. Full live reliability and factual accuracy are not established. This is an experimental portfolio MVP, not a trusted fact-checking service.**
+**Current milestone: a free fictional walkthrough and an implemented, opt-in text research pipeline. Six controlled live requests reached both providers. Three of five distinct claims matched the reference verdict; quote-generation failures still caused incomplete reports. Full live reliability and factual accuracy are not established. This is an experimental portfolio MVP, not a trusted fact-checking service.**
 
 ## Start here — no accounts or purchases
 
@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-55 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+66 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -193,3 +193,25 @@ No API secrets are supplied to these jobs, and live research is disabled. Depend
 Open any demo or research report and choose **Print / Save PDF**. In your browser's print dialog, select a printer or **Save as PDF**. This runs locally and makes no model or search requests.
 
 The print layout removes the input form and buttons, includes the report ID and source URLs, and expands coverage, limitations, and excluded-citation disclosures. Excluded citations keep their warning labels. Closing the print dialog restores the previous disclosure state. JSON export remains available for the full structured record.
+
+## Controlled text validation
+
+See [the validation report](docs/TEXT_VALIDATION.md) for actual outcomes, citation failure diagnosis, browser checks, cost, and remaining acceptance gates. The text MVP is not yet complete; video work remains deferred.
+
+The 12-case real-world starter dataset is `backend/evaluation/real_cases.json`. It is separate from the 12 fictional policy tests. Seven reference cases have not been run live; do not count them as passes.
+
+### Reproduce a budgeted live session
+
+From `backend`, run `.venv/bin/python -m evaluation.live --allow-paid`. From `frontend`, run `VITE_API_BASE_URL=http://127.0.0.1:8765 npm run dev -- --port 5174`, then visit http://127.0.0.1:5174. This temporarily enables the real API in the validation process; it does not edit `.env`. Stop both terminals with Control+C afterward.
+
+The validation allowance is $0.10 of conservatively reserved OpenAI text cost and 12 Tavily searches, with no model retries. Pricing is specific to gpt-4.1-mini. Reservations are written before calls; successful usage reconciles the reservation, while failed calls retain it. The local budget ledger survives restarts. This session used all 12 searches; a restart does not grant more. Any new allowance needs a deliberate new authorization, not deletion of the ledger to bypass the limit. This is a local validation guard, not an account-level billing guarantee or a production budget mechanism. Tavily costs are separate.
+
+Summarize saved traces without network calls, from `backend`:
+
+```sh
+.venv/bin/python -m evaluation.summarize evaluation/results/live-*.json
+```
+
+This counts attempts (including repeats), agreement with available reference labels, incomplete reports, accepted/rejected citations, extraction failures, and provider failures. Citation acceptance is an automated gate, not human-reviewed factual precision. Generated traces include source text and stay ignored by Git.
+
+For offline browser error checks, stop the live validation server and run `.venv/bin/python -m evaluation.replay`. Submit `provider failure` or `validation error` to simulate errors without API calls; other text replays the latest saved report with an explicit replay note. This test utility is local only and is not the production app.
