@@ -119,7 +119,7 @@ npm run build
 
 96 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
-This is engineering regression coverage, not an accuracy benchmark. We have 12 starter reference claims; seven remain untested live. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
+This is engineering regression coverage, not an accuracy benchmark. All 12 starter reference claims have now been attempted across versions. Two of the latest seven were blocked during analysis by the validation budget guard; successful validation remains incomplete. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
 ## Limits before real use
 
@@ -135,7 +135,7 @@ This is engineering regression coverage, not an accuracy benchmark. We have 12 s
 
 ## Next increments
 
-1. Validate the exact saved CONTEXT example and remaining reference claims on the current implementation.
+1. Fix extraction coverage and evidence stance errors found in live validation, then rerun the affected and budget-blocked cases.
 2. Evaluate live claims against professional fact-check references and strengthen source-quality checks.
 3. Persist submissions and evidence in PostgreSQL.
 4. Add video transcription and visible-text extraction.
@@ -248,4 +248,11 @@ From `backend`, inspect a saved failed context example without network calls:
 
 The command matches the rejected citation to its original verifier input and refuses missing or ambiguous page snapshots. With an explicitly authorized budget, `--allow-paid --ledger <existing-budget.json> --output <results/check.json>` performs one attribution/stance check with no web searches and no automatic retries. It uses the existing allowance, never creates a new one. A passing result validates that saved citation only; it does not generate or validate an entire verdict.
 
-This command is prepared and tested offline. The exact live CONTEXT check and the seven remaining reference cases are still pending. Several starter labels have documented defensible alternatives; exact-label disagreement is not automatically a factual error.
+The exact saved CONTEXT citation passed a live check. The seven remaining reference requests were attempted; extraction/stance failures and two budget-blocked cases prevent sign-off. Several starter labels have documented defensible alternatives; exact-label disagreement is not automatically a factual error.
+
+
+### Latest bounded validation — 2026-09-28
+
+The exact CONTEXT replay passed. Seven additional requests exposed two important reliability defects: extraction can omit a false assertion, and the analyst can label contradicting evidence FOR. The verifier rejected seven such citation proposals. Water's universal claim returned FALSE (a documented defensible alternative to its starter label), and the Eiffel Tower year returned TRUE. Pluto and private-count analysis were blocked by conservative budget reservations. These are not seven successful fact checks.
+
+The run used 37 successful model calls, 16 Tavily searches, and approximately $0.06633 in OpenAI tokens, within the approved $0.10/16-search allowance. No automatic retries were used. Saved live mode remains off. All 96 offline tests, 12 policy cases, and the frontend build pass. See `docs/TEXT_VALIDATION.md` for the full case table and limitations. The text MVP remains incomplete.
