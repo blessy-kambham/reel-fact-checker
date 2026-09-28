@@ -2,7 +2,7 @@
 
 **In progress:** an AI fact-checking portfolio project built with React and FastAPI. The current stage supports text input, a fictional demo, and an opt-in research pipeline. Video/Reels input and Instagram integration are planned, not implemented.
 
-**Current milestone: a free fictional walkthrough and an implemented, opt-in text research pipeline. Six controlled live requests reached both providers. Three of five distinct claims matched the reference verdict; quote-generation failures still caused incomplete reports. Full live reliability and factual accuracy are not established. This is an experimental portfolio MVP, not a trusted fact-checking service.**
+**Current milestone: a free fictional walkthrough and an implemented, opt-in text research pipeline. Controlled live runs and follow-up retests reached both providers. Water and Great Wall eventually returned complete reference-matching verdicts, but these runs span different code versions and do not establish accuracy for the current version. Full live reliability and factual accuracy are not established. This is an experimental portfolio MVP, not a trusted fact-checking service.**
 
 ## Start here — no accounts or purchases
 
@@ -117,9 +117,9 @@ cd ../frontend
 npm run build
 ```
 
-92 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+96 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
-This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
+This is engineering regression coverage, not an accuracy benchmark. We have 12 starter reference claims; seven remain untested live. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
 ## Limits before real use
 
@@ -135,7 +135,7 @@ This is engineering regression coverage, not an accuracy benchmark. We still nee
 
 ## Next increments
 
-1. Configure providers together and validate a small set of live text claims.
+1. Validate the exact saved CONTEXT example and remaining reference claims on the current implementation.
 2. Evaluate live claims against professional fact-check references and strengthen source-quality checks.
 3. Persist submissions and evidence in PostgreSQL.
 4. Add video transcription and visible-text extraction.
@@ -216,7 +216,7 @@ This counts attempts (including repeats), agreement with available reference lab
 
 For offline browser error checks, stop the live validation server and run `.venv/bin/python -m evaluation.replay`. Submit `provider failure` or `validation error` to simulate errors without API calls; other text replays the latest saved report with an explicit replay note. This test utility is local only and is not the production app.
 
-## Excerpt selection — offline verified, live validation pending
+## Excerpt selection — offline checks and limited live retests
 
 The analyst now returns a source ID, excerpt ID, statement, and stance. Its output schema has no quote field. The application reconstructs the selected quote from the retrieved text and records `excerpt_id`, `source_start`, and `source_end` in the citation. Offsets are Python Unicode character indexes into the exact extracted source text, with an exclusive end index; they are not HTML or byte offsets.
 
@@ -234,6 +234,18 @@ On 2026-09-28, two newly authorized real API tests used the excerpt-selection im
 
 The verifier now returns two required judgments: `supports_attribution` checks whether the quoted source supports the attributed statement, and `stance_matches` checks its relationship to the original claim. Both must pass. Relevant background definitions can be valid CONTEXT without proving the claim; CONTEXT alone still cannot establish a verdict. Unsupported statements, incorrect stances, irrelevant text, and missing qualifications must still be rejected.
 
-Twelve additional offline cases check the acceptance gates, valid background alongside direct support, context-only abstention, and missing stance judgments. These use scripted judgments and do not establish that the live model follows the clarified instructions. The water case has not been rerun with this change. No paid requests were made for this increment.
+Twelve additional offline cases check the acceptance gates, valid background alongside direct support, context-only abstention, and missing stance judgments. These use scripted judgments and do not establish that the live model follows the clarified instructions. The implementation increment itself made no paid requests. The subsequent water retest is described below; it selected only FOR citations.
 
 A subsequent water retest with the separated verifier judgments returned TRUE/complete: three citations accepted, zero rejected, and no provider errors. All three were FOR, so this success does not directly validate the problematic CONTEXT example. Source independence and quality still need review. See the validation report for usage and remaining acceptance gates.
+
+### Recheck the exact saved CONTEXT citation
+
+From `backend`, inspect a saved failed context example without network calls:
+
+```sh
+.venv/bin/python -m evaluation.context_case evaluation/results/excerpt-retest-2026-09-28/freezing.json
+```
+
+The command matches the rejected citation to its original verifier input and refuses missing or ambiguous page snapshots. With an explicitly authorized budget, `--allow-paid --ledger <existing-budget.json> --output <results/check.json>` performs one attribution/stance check with no web searches and no automatic retries. It uses the existing allowance, never creates a new one. A passing result validates that saved citation only; it does not generate or validate an entire verdict.
+
+This command is prepared and tested offline. The exact live CONTEXT check and the seven remaining reference cases are still pending. Several starter labels have documented defensible alternatives; exact-label disagreement is not automatically a factual error.
