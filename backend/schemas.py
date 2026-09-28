@@ -39,7 +39,8 @@ class Analysis(StrictModel):
     limitations: list[str] = Field(max_length=6)
 
 class CitationJudgment(StrictModel):
-    supports_attribution: bool
+    supports_attribution: bool = Field(description='The quote supports the attributed statement in the context of the full page, without distortion.')
+    stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim; relevant background may be CONTEXT without proving the claim.')
     reason: str
 
 class Source(StrictModel):

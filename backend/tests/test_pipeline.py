@@ -28,7 +28,7 @@ class FakeProvider:
         if schema is Analysis:
             return Analysis(verdict=self.verdict, evidence=[self.draft], limitations=[])
         self.verifier_calls += 1
-        return CitationJudgment(supports_attribution=self.approved, reason='Test judgment')
+        return CitationJudgment(supports_attribution=self.approved, stance_matches=True, reason='Test judgment')
 
 async def fake_fetch(url):
     return url, PAGE

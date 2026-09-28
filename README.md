@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-80 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+92 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -229,3 +229,9 @@ Remaining limitations: sentence splitting is heuristic; an excerpt can omit qual
 ### Excerpt live retest result
 
 On 2026-09-28, two newly authorized real API tests used the excerpt-selection implementation. Great Wall returned FALSE/complete with three accepted citations. Water remained incomplete with five accepted citations and one rejected CONTEXT citation. All nine quotes exactly matched selected excerpts; the remaining rejection concerns semantic context checking rather than altered quote text. The run used four Tavily searches and approximately $0.0224 of OpenAI tokens. See the validation report for the detailed limits and next steps. Saved live mode remains disabled, and the text MVP is not yet complete.
+
+### Context-aware citation verification
+
+The verifier now returns two required judgments: `supports_attribution` checks whether the quoted source supports the attributed statement, and `stance_matches` checks its relationship to the original claim. Both must pass. Relevant background definitions can be valid CONTEXT without proving the claim; CONTEXT alone still cannot establish a verdict. Unsupported statements, incorrect stances, irrelevant text, and missing qualifications must still be rejected.
+
+Twelve additional offline cases check the acceptance gates, valid background alongside direct support, context-only abstention, and missing stance judgments. These use scripted judgments and do not establish that the live model follows the clarified instructions. The water case has not been rerun with this change. No paid requests were made for this increment.

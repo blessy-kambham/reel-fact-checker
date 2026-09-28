@@ -36,10 +36,17 @@ async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
     if quote and quote in normalized(source.text):
         try:
             judgment = await provider.structured(CitationJudgment,
-                'Determine whether the supplied page actually supports the attributed statement and whether the quote is used in context. '
-                'Also check that the assigned FOR/AGAINST/CONTEXT stance accurately describes its relationship to the original claim. Reject cherry-picked, contradictory, or ambiguous attributions. This is a separate citation check, not a truth guarantee.',
+                'Make two separate judgments. First, supports_attribution: does the quoted passage, read in the full page context, '
+                'support the attributed STATEMENT without distortion? This is about the statement, not whether it proves the original claim. '
+                'Second, stance_matches: does the supported statement have the assigned relationship to the ORIGINAL CLAIM? '
+                'FOR requires direct support for that claim; AGAINST requires direct contradiction. '
+                'CONTEXT requires relevant, accurately attributed background such as a definition or scope explanation; '
+                'it need not establish the claim itself. Do not reject valid CONTEXT merely because it does not prove the claim. '
+                'Reject irrelevant material, unsupported statements, missing qualifications, and cherry-picked attributions. '
+                'Do not accept direct support or contradiction mislabeled as CONTEXT. A context label does not excuse an unsupported statement. '
+                'Use false for uncertain judgments and explain which check failed. This is not a truth guarantee.',
                 json.dumps({'claim': claim_text, 'stance': draft.stance, 'statement': draft.statement, 'quote': draft.quote, 'page': source.text}))
-            verified = judgment.supports_attribution
+            verified = judgment.supports_attribution and judgment.stance_matches
             code = 'verified' if verified else 'attribution_rejected'
             reason = judgment.reason
         except (ProviderFailure, asyncio.TimeoutError):
