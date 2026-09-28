@@ -225,3 +225,7 @@ Excerpts prefer sentence boundaries, with overlapping windows for passages longe
 Offline checks preserved 805 excerpts from 13 saved source snapshots without changing their characters. Tests also cover degree symbols, curly apostrophes, long passages, invalid IDs, partial results, and rejected attribution. This verifies source copying, not the model's ability to choose relevant excerpts. The six earlier live results in the validation report predate this change. No new paid requests were made, and the previous search allowance remains exhausted.
 
 Remaining limitations: sentence splitting is heuristic; an excerpt can omit qualifications, and source credibility or model interpretation can still be wrong. Live water/Great Wall retests and independent citation review are required before claiming this solves end-to-end reliability.
+
+### Excerpt live retest result
+
+On 2026-09-28, two newly authorized real API tests used the excerpt-selection implementation. Great Wall returned FALSE/complete with three accepted citations. Water remained incomplete with five accepted citations and one rejected CONTEXT citation. All nine quotes exactly matched selected excerpts; the remaining rejection concerns semantic context checking rather than altered quote text. The run used four Tavily searches and approximately $0.0224 of OpenAI tokens. See the validation report for the detailed limits and next steps. Saved live mode remains disabled, and the text MVP is not yet complete.
