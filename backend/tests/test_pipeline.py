@@ -245,3 +245,17 @@ def test_false_nonfactual_classification_is_audited():
     report = asyncio.run(run_pipeline('The Moon never rotates.', provider, fake_fetch))
     assert report.coverage_status == 'incomplete'
     assert report.claims[0].status == 'incomplete' and not provider.queries
+
+
+@pytest.mark.parametrize('text', ['The Moon never rotates.', 'The Moon produces its own visible light like the Sun.', 'A is true, so B must be true.'])
+def test_exact_copy_needs_no_semantic_audit(text):
+    from services.pipeline import exact_submission_preserved
+    extraction = Extraction(intent='FACTUAL', claims=[AtomicClaim(text=text, context=text)], omitted_claims=False, note='')
+    assert exact_submission_preserved(text, extraction)
+
+
+@pytest.mark.parametrize('claim,context', [('The Moon rotates.', ''), ('The Moon never rotates.', 'It is tidally locked.'), ('The Moon', '')])
+def test_changed_text_or_invented_context_cannot_bypass_audit(claim, context):
+    from services.pipeline import exact_submission_preserved
+    extraction = Extraction(intent='FACTUAL', claims=[AtomicClaim(text=claim, context=context)], omitted_claims=False, note='')
+    assert not exact_submission_preserved('The Moon never rotates.', extraction)

@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-108 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+114 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. All 12 starter reference claims have now been attempted across versions. Two of the latest seven were blocked during analysis by the validation budget guard; successful validation remains incomplete. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -272,3 +272,13 @@ This adds one structured model call when extraction has not already flagged an o
 Three Moon cases were attempted after adding the coverage audit. Extraction preserved both assertions of the compound claim, but the audit rejected all three cases, incorrectly requiring false claims to be corrected or qualified. No research or citation checks ran. This is a confirmed coverage-audit false-rejection problem, not successful live validation. The next change must separate textual fidelity from factual truth more reliably.
 
 The run used six model calls, approximately $0.0018868 in OpenAI tokens, and zero Tavily searches. Validation budgets now persist a stop after any budget refusal, record blocked stages, and serialize model calls for reliable per-call usage accounting. 108 offline tests and 12 policy cases pass. The text MVP remains incomplete.
+
+
+### Current roadmap stage
+
+We are in **Step 1: text validation**. Steps 2–9 remain: source-quality/app cost controls, browser tests, database/history and article ingestion, video pipeline, real-video validation, social links, deployment, Instagram DM integration.
+
+Coverage now accepts an exact full-submission copy using a deterministic text comparison, provided intent is checkable, no omissions are flagged, and context contains no added text. Rewritten/split claims still require the model fidelity audit. Exact preservation proves no text was dropped; it does not prove truth, atomicity, or causal validity. The audit prompt now includes faithful false-statement and changed-negation examples.
+
+
+Latest retest: unchanged single claims reached research, but evidence stance errors still withheld their verdicts. The compound claim's semantic audit still incorrectly rejected a false assertion. Total usage across the shared allowance is about $0.03070 and four searches. Step 1 remains incomplete; next work is structured assertion-to-input mapping and evidence stance handling. See the validation report for exact results.
