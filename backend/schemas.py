@@ -27,9 +27,15 @@ class EvidenceDraft(StrictModel):
     statement: str = Field(min_length=1, max_length=1000)
     stance: Literal['FOR', 'AGAINST', 'CONTEXT']
 
+class EvidenceSelection(StrictModel):
+    source_id: str
+    excerpt_id: str
+    statement: str = Field(min_length=1, max_length=1000)
+    stance: Literal['FOR', 'AGAINST', 'CONTEXT']
+
 class Analysis(StrictModel):
     verdict: Verdict
-    evidence: list[EvidenceDraft] = Field(max_length=6)
+    evidence: list[EvidenceSelection] = Field(max_length=6)
     limitations: list[str] = Field(max_length=6)
 
 class CitationJudgment(StrictModel):
@@ -45,11 +51,16 @@ class Source(StrictModel):
     source_type: str = 'Unrated; assess methodology and relevance'
 
 class Citation(EvidenceDraft):
+    # Empty only when an invalid selection has no source text to quote.
+    quote: str = Field(max_length=400)
+    excerpt_id: str | None = None
+    source_start: int | None = None
+    source_end: int | None = None
     title: str
     url: str | None
     verified: bool
     verification: str
-    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable'] = 'not_checked'
+    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable'] = 'not_checked'
     retrieved_at: str | None = None
     source_text_sha256: str | None = None
 

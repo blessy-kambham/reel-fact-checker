@@ -17,7 +17,7 @@ Click **Explore the free demo**. Its claim, town, numbers, and excerpts are fict
 - Bounded parallel research: two claims at a time, one report at a time per server process.
 - Separate supporting and contradicting searches for each claim.
 - Retrieval of up to six source pages per claim; snippets alone are never verified evidence.
-- Analysis using only the retrieved pages, with source IDs assigned by the application.
+- Analysis selects numbered excerpts from retrieved pages; the application copies quotes directly from source text.
 - Citation checks: exact normalized quote matching followed by a separate model check of attribution and stance.
 - Failed citation checks withhold the verdict. Missing research produces UNVERIFIABLE.
 - Partial claim results on model/search failures, time limits, report limitations, token/call counts.
@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-66 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+80 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. We still need labeled real claims, citation precision evaluation, and live integration validation. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -159,7 +159,7 @@ In VS Code, run **Terminal → Run Task → Evaluation: offline**, or run from `
 
 The runner checks 12 versioned fictional cases from `backend/evaluation/cases.json`. It reports expected vs actual verdicts and citation counts, and exits nonzero on a failed case. Generated reports are ignored by Git.
 
-The cases cover supported evidence, unknown source IDs, fabricated/blank quotes, misattribution, unavailable pages, search outages, failure to research contradictions, a FALSE candidate without contradicting evidence, conflicting evidence, context-only evidence, and mixed valid/invalid citations.
+The cases cover supported evidence, unknown source IDs, invented/blank excerpt IDs, misattribution, unavailable pages, search outages, failure to research contradictions, a FALSE candidate without contradicting evidence, conflicting evidence, context-only evidence, and mixed valid/invalid citations.
 
 **These are policy regression tests, not fact-check accuracy scores.** Sources, analyst responses, and semantic citation judgments are scripted. The suite runs the application's research and citation validation logic with injected offline providers. It does not measure whether a real model extracts claims correctly, finds good sources, or makes accurate semantic judgments. The pytest wrapper blocks network connections. No API keys are loaded, and no credits are spent.
 
@@ -176,7 +176,7 @@ The launcher checks installed dependencies and ports 8000/5173, then waits for b
 
 ## Citation failure diagnostics
 
-Reports now retain `rejected_citations` separately from accepted `evidence`. The UI labels them **Excluded citations — not evidence**, and hides the unverified proposal under a disclosure. JSON export includes the proposal, reason, and a stable failure code: `unknown_source`, `empty_quote`, `quote_not_found`, `attribution_rejected`, or `check_unavailable`. Successful checks use `verified`; demo fixtures remain `not_checked`.
+Reports now retain `rejected_citations` separately from accepted `evidence`. The UI labels them **Excluded citations — not evidence**, and hides the unverified proposal under a disclosure. JSON export includes the proposal, reason, and a stable failure code: `unknown_source`, `unknown_excerpt`, `empty_quote`, `quote_not_found`, `attribution_rejected`, or `check_unavailable`. Successful checks use `verified`; demo fixtures remain `not_checked`.
 
 Retrieved citations include a retrieval timestamp and SHA-256 fingerprint of the exact extracted text supplied to validation. A fingerprint identifies that text but cannot reconstruct it, prove its accuracy, or guarantee the page will remain unchanged. Full page bodies are not included in the report.
 
@@ -215,3 +215,13 @@ Summarize saved traces without network calls, from `backend`:
 This counts attempts (including repeats), agreement with available reference labels, incomplete reports, accepted/rejected citations, extraction failures, and provider failures. Citation acceptance is an automated gate, not human-reviewed factual precision. Generated traces include source text and stay ignored by Git.
 
 For offline browser error checks, stop the live validation server and run `.venv/bin/python -m evaluation.replay`. Submit `provider failure` or `validation error` to simulate errors without API calls; other text replays the latest saved report with an explicit replay note. This test utility is local only and is not the production app.
+
+## Excerpt selection — offline verified, live validation pending
+
+The analyst now returns a source ID, excerpt ID, statement, and stance. Its output schema has no quote field. The application reconstructs the selected quote from the retrieved text and records `excerpt_id`, `source_start`, and `source_end` in the citation. Offsets are Python Unicode character indexes into the exact extracted source text, with an exclusive end index; they are not HTML or byte offsets.
+
+Excerpts prefer sentence boundaries, with overlapping windows for passages longer than 400 characters. Source text is not rewritten. Unknown IDs and excerpts belonging to a different source fail validation. The quote-presence check and separate attribution/stance check still run, using the full retrieved source for context. A valid excerpt is not automatically accepted evidence.
+
+Offline checks preserved 805 excerpts from 13 saved source snapshots without changing their characters. Tests also cover degree symbols, curly apostrophes, long passages, invalid IDs, partial results, and rejected attribution. This verifies source copying, not the model's ability to choose relevant excerpts. The six earlier live results in the validation report predate this change. No new paid requests were made, and the previous search allowance remains exhausted.
+
+Remaining limitations: sentence splitting is heuristic; an excerpt can omit qualifications, and source credibility or model interpretation can still be wrong. Live water/Great Wall retests and independent citation review are required before claiming this solves end-to-end reliability.

@@ -5,8 +5,9 @@ import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from schemas import Extraction, Analysis, CitationJudgment, Citation, ClaimResult, Report, Source
+from schemas import Extraction, Analysis, CitationJudgment, Citation, ClaimResult, Report, Source, EvidenceDraft
 from services.fetcher import fetch_text
+from services.excerpts import source_excerpts
 from services.providers import ProviderFailure
 
 
@@ -50,6 +51,26 @@ async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
                     source_text_sha256=hashlib.sha256(source.text.encode('utf-8')).hexdigest())
 
 
+async def verify_selection(selection, sources, excerpts, provider, claim_text):
+    source = sources.get(selection.source_id)
+    excerpt = excerpts.get(selection.excerpt_id)
+    if source is None or excerpt is None or excerpt.source_id != selection.source_id:
+        return Citation(**selection.model_dump(), quote='',
+                        title=source.title if source else 'Unknown source',
+                        url=source.url if source else None, verified=False,
+                        verification='Rejected: selected source or excerpt was not supplied for this claim.',
+                        verification_code='unknown_source' if source is None else 'unknown_excerpt',
+                        retrieved_at=source.retrieved_at if source else None,
+                        source_text_sha256=hashlib.sha256(source.text.encode('utf-8')).hexdigest() if source else None)
+    # The model never supplies quote text. Reconstruct it from the source itself.
+    quote = source.text[excerpt.start:excerpt.end]
+    draft = EvidenceDraft(source_id=selection.source_id, quote=quote,
+                          statement=selection.statement, stance=selection.stance)
+    citation = await verify_citation(draft, sources, provider, claim_text)
+    return citation.model_copy(update={'excerpt_id':excerpt.id,
+                                      'source_start':excerpt.start, 'source_end':excerpt.end})
+
+
 async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
     warnings = []
     sources = {}
@@ -80,21 +101,28 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
     if not sources:
         result = unresolved(claim.text, 'No readable sources were retrieved. Search snippets are not accepted as verified evidence.')
         return result.model_copy(update={'supporting_search': search_status['FOR'], 'contradicting_search': search_status['AGAINST'], 'limitations': result.limitations + warnings})
+    excerpts = {excerpt.id: excerpt for source in sources.values() for excerpt in source_excerpts(source)}
+    source_inputs = []
+    for source in sources.values():
+        item = source.model_dump(exclude={'text'})
+        item['excerpts'] = [dict(id=e.id, start=e.start, end=e.end, text=e.text)
+                            for e in excerpts.values() if e.source_id == source.id]
+        source_inputs.append(item)
     analysis = await provider.structured(Analysis,
         'Analyze only the supplied pages for the claim. Compare FOR and AGAINST evidence. Use UNVERIFIABLE when evidence is '
         'insufficient, unclear, stale, or not directly relevant. Prefer primary evidence; evaluate author authority, methodology, publication date, and editorial standards. Do not treat multiple copied articles as independent sources. Distinguish correlation from causation, dates and scope. '
-        'For every explanatory factual statement return an evidence entry with its exact short quote and supplied source_id. '
-        'Copy each quote as one short contiguous substring of the supplied page, character for character. '
-        'Preserve symbols such as °; never paraphrase, insert ellipses, join separate passages, or introduce control characters. '
+        'For every explanatory factual statement select one supplied source_id and excerpt_id. '
+        'Do not write quotes: the application copies the selected excerpt directly. '
+        'Read surrounding excerpts for context. If no excerpt supports the statement, omit the statement. '
         'FOR means evidence supporting the ORIGINAL CLAIM, not supporting your proposed verdict. '
         'AGAINST means evidence contradicting the ORIGINAL CLAIM, including evidence supporting a FALSE verdict. '
         'Use CONTEXT only when the excerpt neither supports nor contradicts the original claim. '
         'Never invent IDs or URLs. Limitations must describe research limitations only, not uncited factual assertions. '
         'Do not assign confidence percentages. Do not mistake the absence of contradictory evidence for proof.',
-        json.dumps({'claim': claim.model_dump(), 'sources': [s.model_dump() for s in sources.values()]}))
+        json.dumps({'claim': claim.model_dump(), 'sources': source_inputs}))
     citations = []
     for draft in analysis.evidence:
-        citations.append(await verify_citation(draft, sources, provider, claim.text))
+        citations.append(await verify_selection(draft, sources, excerpts, provider, claim.text))
     failed = any(not citation.verified for citation in citations)
     if failed:
         warnings.append(f'{sum(not c.verified for c in citations)} citation(s) failed validation and were excluded.')

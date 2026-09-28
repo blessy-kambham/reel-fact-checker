@@ -12,9 +12,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -39,9 +39,9 @@
       "evidence": [
         {
           "source_id": "FAKE",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "FAKE:E1"
         }
       ],
       "limitations": []
@@ -67,9 +67,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "A fabricated result.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:INVENTED"
         }
       ],
       "limitations": []
@@ -78,8 +78,8 @@
       "verdict": "UNVERIFIABLE",
       "evidence_count": 0
     },
-    "id": "fabricated_quote",
-    "purpose": "Reject a quote absent from the retrieved source.",
+    "id": "invented_excerpt",
+    "purpose": "Reject an excerpt ID absent from the supplied source excerpts.",
     "expected_judgment_calls": 0
   },
   {
@@ -95,9 +95,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "   ",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": " "
         }
       ],
       "limitations": []
@@ -106,8 +106,8 @@
       "verdict": "UNVERIFIABLE",
       "evidence_count": 0
     },
-    "id": "blank_quote",
-    "purpose": "Whitespace must not pass the substring check as an empty quote.",
+    "id": "blank_excerpt",
+    "purpose": "Reject a blank excerpt ID before calling the attribution model.",
     "expected_judgment_calls": 0
   },
   {
@@ -123,9 +123,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -154,9 +154,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -181,9 +181,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -212,9 +212,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -242,9 +242,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -273,15 +273,15 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         },
         {
           "source_id": "S2",
-          "quote": "An independent fictional sensor recorded 9 units in room A.",
           "statement": "The other fictional measurement disagrees with the claim.",
-          "stance": "AGAINST"
+          "stance": "AGAINST",
+          "excerpt_id": "S2:E1"
         }
       ],
       "limitations": []
@@ -306,9 +306,9 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "CONTEXT"
+          "stance": "CONTEXT",
+          "excerpt_id": "S1:E1"
         }
       ],
       "limitations": []
@@ -333,15 +333,15 @@
       "evidence": [
         {
           "source_id": "S1",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "S1:E1"
         },
         {
           "source_id": "FAKE",
-          "quote": "The fictional sensor recorded 12 units in room A.",
           "statement": "The fictional room A result was 12 units.",
-          "stance": "FOR"
+          "stance": "FOR",
+          "excerpt_id": "FAKE:E1"
         }
       ],
       "limitations": []

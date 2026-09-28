@@ -2,13 +2,13 @@ import asyncio
 import json
 import socket
 import pytest
-from schemas import AtomicClaim, Analysis, EvidenceDraft, CitationJudgment, Extraction
-from services.pipeline import research_claim, run_pipeline
+from schemas import AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
+from services.pipeline import research_claim, run_pipeline, verify_citation
 from services.providers import ProviderFailure
 from services.fetcher import validate_url, PublicResolver
 
 PAGE = 'The fictional sensor measured 12 units during the test. The sample was limited to one room.'
-DRAFT = EvidenceDraft(source_id='S1', quote='The fictional sensor measured 12 units during the test.', statement='The sensor measured 12 units in the test.', stance='FOR')
+DRAFT = EvidenceSelection(source_id='S1', excerpt_id='S1:E1', statement='The sensor measured 12 units in the test.', stance='FOR')
 CLAIM = AtomicClaim(text='The sensor measured 12 units.', context='Fictional test')
 
 class FakeProvider:
@@ -40,7 +40,7 @@ def test_both_directions_and_quote_check():
     assert len(provider.queries) == 2 and 'contradicting' in provider.queries[1]
     assert any('No verified contradicting' in s for s in result.limitations)
 
-@pytest.mark.parametrize('draft', [DRAFT.model_copy(update={'source_id': 'invented'}), DRAFT.model_copy(update={'quote': 'Invented quote'})])
+@pytest.mark.parametrize('draft', [DRAFT.model_copy(update={'source_id': 'invented'}), DRAFT.model_copy(update={'excerpt_id': 'S1:INVENTED'})])
 def test_fabricated_citations_rejected(draft):
     provider = FakeProvider(draft=draft)
     result = asyncio.run(research_claim(CLAIM, provider, fake_fetch))
@@ -113,18 +113,17 @@ def test_mixed_dns_blocked(monkeypatch):
             await PublicResolver().resolve('example.org', 443)
     asyncio.run(scenario())
 
-@pytest.mark.parametrize('draft,code', [
-    (DRAFT.model_copy(update={'source_id': 'invented'}), 'unknown_source'),
-    (DRAFT.model_copy(update={'quote': 'Absent quote'}), 'quote_not_found'),
-    (DRAFT.model_copy(update={'quote': '  '}), 'empty_quote'),
+@pytest.mark.parametrize('source_id,quote,code', [
+    ('invented', 'Known quote', 'unknown_source'),
+    ('S1', 'Absent quote', 'quote_not_found'),
+    ('S1', '  ', 'empty_quote'),
 ])
-def test_rejected_citations_are_auditable(draft, code):
-    result = asyncio.run(research_claim(CLAIM, FakeProvider(draft=draft), fake_fetch))
-    rejected = result.rejected_citations[0]
+def test_rejected_citations_are_auditable(source_id, quote, code):
+    draft = EvidenceDraft(source_id=source_id,quote=quote,statement='Test',stance='FOR')
+    source = Source(id='S1',title='Fixture',url='https://example.org',text=PAGE,retrieved_at='2026-09-28')
+    rejected = asyncio.run(verify_citation(draft, {'S1':source}, FakeProvider()))
     assert rejected.verification_code == code
-    assert rejected.quote == draft.quote
-    assert not rejected.verified and result.evidence == []
-    assert result.verdict == 'UNVERIFIABLE'
+    assert rejected.quote == draft.quote and not rejected.verified
     if code == 'unknown_source':
         assert rejected.url is None and rejected.source_text_sha256 is None
     else:

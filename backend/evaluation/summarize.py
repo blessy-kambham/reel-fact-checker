@@ -21,7 +21,7 @@ def summarize(traces, cases):
             'agreement': final == case['reference_verdict'] if case and final else False,
             'incomplete': not claims or any(c['status'] != 'complete' for c in claims),
             'accepted_citations': len(accepted), 'rejected_citations': len(rejected),
-            'unsupported_citations': sum(c.get('verification_code') in ('unknown_source','empty_quote','quote_not_found','attribution_rejected') for c in rejected),
+            'unsupported_citations': sum(c.get('verification_code') in ('unknown_source','unknown_excerpt','empty_quote','quote_not_found','attribution_rejected') for c in rejected),
             'extraction_failure': not any(m.get('stage') == 'Extraction' and m.get('output') for m in trace.get('model', [])),
             'provider_failures': sum('error' in x for x in trace.get('model', []) + trace.get('searches', [])),
             'rejections': [{'code':c.get('verification_code'), 'reason':c['verification'], 'quote':c['quote']} for c in rejected],
