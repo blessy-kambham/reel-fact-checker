@@ -8,6 +8,7 @@ from uuid import uuid4
 from schemas import ExtractionCoverage, Extraction, Analysis, CitationJudgment, Citation, ClaimResult, Report, Source, EvidenceDraft
 from services.fetcher import fetch_text
 from services.excerpts import source_excerpts
+from services.input_mapping import map_input
 from services.providers import ProviderFailure
 
 
@@ -176,14 +177,17 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
         'attribution, and qualifiers. Do not treat opinions or fictional content as factual claims. If mixed, extract only '
         'checkable assertions and explain exclusions in note. Factual means capable of being checked, not known to be true. '
         'Include false, misleading and uncertain assertions exactly as asserted. Never drop an assertion because you think it is incorrect. '
+        'Copy claim text VERBATIM as contiguous substrings of the submission, in their original order; do not paraphrase or expand pronouns. '
+        'For split claims, set each context to the entire original submission verbatim so relationships and pronouns are preserved. '
         'Split compound assertions, including conclusions after so or therefore. Keep dates attached to the event; do not extract a date as a separate claim. '
         'For example, same side of the Moon so the other side never gets sunlight contains TWO checkable assertions; preserve both. '
         'Before returning, compare the extraction with every assertion in the submission. Set omitted_claims if any checkable assertion is missing, including more than three claims. '
         'For nonfactual intent return no claims. Do not determine truth during extraction.', text)
     # A separate judgment checks the original submission, not the extractor's confidence.
+    input_spans = map_input(text, extraction)
     coverage_status = 'incomplete' if extraction.omitted_claims else 'passed'
     coverage_issues = []
-    if not extraction.omitted_claims and not exact_submission_preserved(text, extraction):
+    if not extraction.omitted_claims and input_spans is None:
         try:
             coverage = await provider.structured(ExtractionCoverage,
                 'You are a text-transformation auditor, not a fact checker. Your only task is semantic fidelity between two texts. '
@@ -215,7 +219,7 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
         return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(),
                       intent=extraction.intent, note=reason, claims=[unresolved(text, reason)],
                       limitations=[reason] + coverage_issues, usage=provider.usage,
-                      omitted_claims=extraction.omitted_claims, coverage_status=coverage_status)
+                      omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
     limiter = asyncio.Semaphore(2)
     async def branch(claim):
         async with limiter:
@@ -228,4 +232,4 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
     results = await asyncio.gather(*(branch(c) for c in extraction.claims)) if extraction.intent == 'FACTUAL' else []
     limitations = ['At most three claims and six search results per claim are processed in this local MVP.']
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
-                  note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims, coverage_status=coverage_status)
+                  note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])

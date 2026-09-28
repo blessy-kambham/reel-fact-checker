@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-114 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+123 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. All 12 starter reference claims have now been attempted across versions. Two of the latest seven were blocked during analysis by the validation budget guard; successful validation remains incomplete. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -282,3 +282,13 @@ Coverage now accepts an exact full-submission copy using a deterministic text co
 
 
 Latest retest: unchanged single claims reached research, but evidence stance errors still withheld their verdicts. The compound claim's semantic audit still incorrectly rejected a false assertion. Total usage across the shared allowance is about $0.03070 and four searches. Step 1 remains incomplete; next work is structured assertion-to-input mapping and evidence stance handling. See the validation report for exact results.
+
+
+### Verbatim input mapping
+
+Extraction now requests ordered, verbatim substrings rather than paraphrased claims. The backend records validated `input_spans` (start, end, text) in reports. A complete mapping must account for all submitted text except a narrow set of clause separators; split claims retain the entire original submission as context. Missing assertions, changed wording, reordered claims, dropped conditions and added context cannot pass this deterministic path. Unmapped extraction still requires the conservative semantic audit and can be rejected.
+
+This verifies textual coverage, not factual truth, atomicity, or valid causal reasoning. Research and independent citation checks still decide whether a verdict can be issued. 123 offline tests and 12 policy cases pass.
+
+
+Live mapping retest: both compound Moon assertions were preserved and researched. The no-sunlight assertion returned FALSE; the same-side assertion remained UNVERIFIABLE due to conflicting evidence labels. All eight selected citations passed verification. This confirms the mapping path for this case; text validation remains incomplete. Shared allowance usage is $0.0561984 and eight searches. Details are in `docs/TEXT_VALIDATION.md`.

@@ -80,6 +80,11 @@ class ClaimResult(StrictModel):
     contradicting_search: str
     sources_checked: int
 
+class InputSpan(StrictModel):
+    start: int
+    end: int
+    text: str
+
 class Report(StrictModel):
     id: str
     mode: Literal['live', 'demo']
@@ -91,4 +96,5 @@ class Report(StrictModel):
     limitations: list[str]
     usage: dict[str, int]
     omitted_claims: bool = False
+    input_spans: list[InputSpan] = Field(default_factory=list)
     coverage_status: Literal["not_checked", "passed", "incomplete", "unavailable"] = "not_checked"
