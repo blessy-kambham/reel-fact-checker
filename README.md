@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-99 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+105 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. All 12 starter reference claims have now been attempted across versions. Two of the latest seven were blocked during analysis by the validation budget guard; successful validation remains incomplete. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -260,6 +260,8 @@ The run used 37 successful model calls, 16 Tavily searches, and approximately $0
 
 ### Extraction coverage safeguard
 
-Reports now expose `omitted_claims`. When extraction reports any omitted assertion, the backend withholds all verdicts, keeps verified evidence for inspection, and the frontend displays an incomplete-coverage warning. Extraction instructions explicitly retain false assertions and compound conclusions, and keep dates attached to events. Evidence schema descriptions and analyst examples reinforce stance relative to the original claim. Independent citation verification remains mandatory.
+Before web research, a separate model judgment compares extraction with the original submission. It checks missing assertions, changed qualifiers, invented context, and intent classification. Flagged omissions, failed coverage judgments, and unavailable checks stop research and return an incomplete UNVERIFIABLE report for the original submission. The API exposes `coverage_status`, and the frontend shows an explicit warning.
 
-99 offline tests and 12 policy cases pass, and the frontend builds. These changes have not yet been retested with live providers. An omission that the extractor fails to flag can still escape this safeguard; `omitted_claims=false` is not proof of full coverage. Broader coverage validation and live stance reliability remain open.
+This adds one structured model call when extraction has not already flagged an omission. It uses the same provider/model, so correlated mistakes remain possible; passing the check is not proof of coverage or truth. No automatic repair or retry is added.
+
+105 offline tests, 12 policy cases, and the frontend build pass. The new coverage stage has not been tested with live providers; live accuracy and evidence stance reliability remain open acceptance gates.

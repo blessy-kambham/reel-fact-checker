@@ -44,7 +44,8 @@ export default function Report({ report }) {
   return <section ref={reportElement} className="report" aria-label="Fact-check report">
     <div className="card-heading"><p className="eyebrow">{report.mode === 'demo' ? 'FICTIONAL DEMO REPORT' : 'RESEARCH REPORT'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button></div></div>
     <h2>{report.mode === 'demo' ? 'See how evidence changes the story.' : 'Your claim-by-claim report'}</h2>
-    {report.omitted_claims && <p className="notice" role="alert">Incomplete coverage: some assertions were omitted. Verdicts are withheld. Submit each assertion separately.</p>}
+    {['incomplete', 'unavailable'].includes(report.coverage_status) && <p className="notice" role="alert">Extraction coverage {report.coverage_status}. No research was started and no verdict was established. Submit each assertion separately.</p>}
+    {report.omitted_claims && !report.coverage_status && <p className="notice" role="alert">Incomplete coverage: some assertions were omitted. Verdicts are withheld. Submit each assertion separately.</p>}
     <p className="report-meta">Report ID: {report.id}</p><p className="notice">{report.note}</p>
     <p className="report-meta">{new Date(report.created_at).toLocaleString()} · {report.claims.length} claims · {report.usage.search_calls} searches · {report.usage.model_calls} model calls</p>
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}

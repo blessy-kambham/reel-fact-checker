@@ -2,7 +2,7 @@ import asyncio
 import json
 import socket
 import pytest
-from schemas import AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
+from schemas import ExtractionCoverage, AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
 from services.pipeline import research_claim, run_pipeline, verify_citation
 from services.providers import ProviderFailure
 from services.fetcher import validate_url, PublicResolver
@@ -23,6 +23,8 @@ class FakeProvider:
             raise ProviderFailure('Search unavailable')
         return [{'url': 'https://example.org/report', 'title': 'Test report'}]
     async def structured(self, schema, instructions, data):
+        if schema is ExtractionCoverage:
+            return ExtractionCoverage(complete=True, issues=[])
         if schema is Extraction:
             return Extraction(intent='FACTUAL', claims=self.claims, omitted_claims=False, note='')
         if schema is Analysis:
@@ -91,6 +93,8 @@ def test_parallelism_cap():
 def test_opinion_skips_research():
     class Opinion(FakeProvider):
         async def structured(self, schema, instructions, data):
+            if schema is ExtractionCoverage:
+                return ExtractionCoverage(complete=True, issues=[])
             return Extraction(intent='OPINION', claims=[], omitted_claims=False, note='Opinion only')
     provider = Opinion()
     report = asyncio.run(run_pipeline('I like green.', provider, fake_fetch))
@@ -173,8 +177,9 @@ def test_omitted_false_assertion_withholds_partial_true_result():
     assert report.omitted_claims
     assert report.claims[0].verdict == 'UNVERIFIABLE'
     assert report.claims[0].status == 'incomplete'
-    assert report.claims[0].evidence[0].verified  # Keep the audit evidence.
-    assert any('Coverage is incomplete' in item for item in report.limitations)
+    assert report.claims[0].evidence == []
+    assert report.coverage_status == 'incomplete'
+    assert report.claims[0].claim == report.submitted_text
     assert json.loads(report.model_dump_json())['omitted_claims'] is True
 
 
@@ -195,3 +200,48 @@ def test_complete_extraction_retains_verified_result():
     report = asyncio.run(run_pipeline(CLAIM.text, FakeProvider(), fake_fetch))
     assert not report.omitted_claims
     assert report.claims[0].verdict == 'TRUE'
+
+
+@pytest.mark.parametrize('complete,issues', [(False, ['Missing false assertion']), (False, ['Changed date or negation']), (True, ['Missing assertion'])])
+def test_unflagged_coverage_failure_stops_search(complete, issues):
+    class Audit(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is ExtractionCoverage:
+                assert json.loads(data)['submission'] == 'Original compound assertion'
+                return ExtractionCoverage(complete=complete, issues=issues)
+            return await super().structured(schema, instructions, data)
+    provider = Audit()
+    report = asyncio.run(run_pipeline('Original compound assertion', provider, fake_fetch))
+    assert report.coverage_status == 'incomplete' and not report.omitted_claims
+    assert report.claims[0].claim == report.submitted_text
+    assert report.claims[0].verdict == 'UNVERIFIABLE'
+    assert issues[0] in report.limitations
+    assert not provider.queries
+
+
+@pytest.mark.parametrize('error', [ProviderFailure('secret diagnostic'), asyncio.TimeoutError()])
+def test_coverage_outage_stops_search(error):
+    class Audit(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is ExtractionCoverage:
+                raise error
+            return await super().structured(schema, instructions, data)
+    provider = Audit()
+    report = asyncio.run(run_pipeline('A claim', provider, fake_fetch))
+    assert report.coverage_status == 'unavailable'
+    assert not provider.queries
+    assert 'secret diagnostic' not in report.model_dump_json()
+
+
+def test_false_nonfactual_classification_is_audited():
+    class Audit(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is Extraction:
+                return Extraction(intent='OPINION', claims=[], omitted_claims=False, note='')
+            if schema is ExtractionCoverage:
+                return ExtractionCoverage(complete=False, issues=['Checkable assertion classified as opinion'])
+            raise AssertionError('No research expected')
+    provider = Audit()
+    report = asyncio.run(run_pipeline('The Moon never rotates.', provider, fake_fetch))
+    assert report.coverage_status == 'incomplete'
+    assert report.claims[0].status == 'incomplete' and not provider.queries

@@ -21,6 +21,10 @@ class Extraction(StrictModel):
     omitted_claims: bool = Field(description="True if any checkable assertion was left out, including when the three-claim limit is exceeded. False assertions must be extracted too.")
     note: str
 
+class ExtractionCoverage(StrictModel):
+    complete: bool = Field(description='Every checkable assertion is represented without changed meaning; intent and exclusions are justified without deciding truth.')
+    issues: list[str] = Field(max_length=6, description='Missing or changed assertions, lost qualifiers, invented context, or incorrect intent. Empty only when coverage is complete.')
+
 class EvidenceDraft(StrictModel):
     source_id: str
     quote: str = Field(min_length=1, max_length=400)
@@ -87,3 +91,4 @@ class Report(StrictModel):
     limitations: list[str]
     usage: dict[str, int]
     omitted_claims: bool = False
+    coverage_status: Literal["not_checked", "passed", "incomplete", "unavailable"] = "not_checked"
