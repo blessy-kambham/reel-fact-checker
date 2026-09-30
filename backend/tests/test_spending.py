@@ -138,3 +138,13 @@ def test_unpriced_model_disables_live_research(live_client, monkeypatch):
     monkeypatch.setenv('OPENAI_MODEL', 'some-other-model')
     body = live_client.get('/config').json()
     assert body['live_ready'] is False and 'gpt-4.1-mini' in body['message']
+
+
+def test_reservation_is_conservative_but_not_four_times_too_high():
+    from services.budget import BYTES_PER_TOKEN
+    page = 'The quick brown fox jumps over the lazy dog. ' * 400  # About 18,000 characters, like a fetched page.
+    budget = Budget(max_usd='1.00')
+    cost = budget.reserve('instructions', page, Extraction)
+    realistic_tokens = len(page) / 4
+    assert cost >= Decimal(realistic_tokens) * budget.input_price  # Still covers real input usage.
+    assert BYTES_PER_TOKEN == 3 and cost < Decimal('0.02')

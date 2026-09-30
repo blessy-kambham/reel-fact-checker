@@ -216,3 +216,31 @@ def test_relation_and_analysis_prompts_exclude_neighbouring_assertions():
     check(Capture())
     assert 'evidence about another claim is never SUPPORTS' in prompts['EvidenceRelation']
     assert 'never select evidence about them' in prompts['Analysis']
+
+
+def test_invented_id_is_ignored_but_misattribution_still_withholds():
+    invented = DRAFT.model_copy(update={'excerpt_id': 'S1:INVENTED'})
+    ok = check(Scripted(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1']), drafts=[DRAFT, invented]))
+    assert ok.verdict == 'TRUE' and ok.verdict_state == 'issued' and ok.status == 'complete'
+    assert [c.verification_code for c in ok.rejected_citations] == ['unknown_excerpt']
+
+    class Misattributed(Scripted):
+        async def structured(self, schema, instructions, data):
+            from schemas import CitationJudgment
+            if schema is CitationJudgment and json.loads(data)['statement'] == 'The sample was limited to one room.':
+                return CitationJudgment(supports_attribution=False, stance_matches=True, reason='Scripted rejection')
+            return await super().structured(schema, instructions, data)
+    second = DRAFT.model_copy(update={'statement': 'The sample was limited to one room.'})
+    withheld = check(Misattributed(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1']), drafts=[DRAFT, second]))
+    assert withheld.withheld_reason == 'citation_failed'
+
+
+def test_relation_prompt_treats_general_facts_as_background():
+    prompts = {}
+    class Capture(Scripted):
+        async def structured(self, schema, instructions, data):
+            prompts[schema.__name__] = instructions
+            return await super().structured(schema, instructions, data)
+    check(Capture())
+    assert 'General facts about the subject' in prompts['EvidenceRelation']
+    assert 'BACKGROUND, not CONTRADICTS' in prompts['EvidenceRelation']

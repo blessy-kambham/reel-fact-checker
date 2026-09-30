@@ -347,10 +347,46 @@
       "limitations": []
     },
     "expected": {
-      "verdict": "UNVERIFIABLE",
+      "verdict": "TRUE",
       "evidence_count": 1
     },
     "id": "mixed_valid_invalid_citations",
-    "purpose": "Keep usable evidence visible while withholding a verdict if another citation fails."
+    "purpose": "Ignore a model-invented citation ID; the remaining verified evidence still supports a verdict."
+  },
+  {
+    "id": "mixed_valid_misattributed_citations",
+    "purpose": "A genuinely misattributed citation still withholds the verdict, even beside valid evidence.",
+    "claim": "The fictional sensor recorded 12 units in room A.",
+    "pages": [
+      {
+        "url": "https://example.org/sensor-a",
+        "text": "The fictional sensor recorded 12 units in room A. This controlled fixture is not a real scientific source."
+      }
+    ],
+    "candidate": {
+      "verdict": "TRUE",
+      "limitations": [],
+      "evidence": [
+        {
+          "source_id": "S1",
+          "excerpt_id": "S1:E1",
+          "stance": "FOR",
+          "statement": "The fictional room A result was 12 units."
+        },
+        {
+          "source_id": "S1",
+          "excerpt_id": "S1:E1",
+          "stance": "FOR",
+          "statement": "The sensor was independently calibrated."
+        }
+      ]
+    },
+    "rejected_statements": [
+      "The sensor was independently calibrated."
+    ],
+    "expected": {
+      "verdict": "UNVERIFIABLE",
+      "evidence_count": 1
+    }
   }
 ]

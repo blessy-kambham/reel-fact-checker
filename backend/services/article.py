@@ -2,6 +2,7 @@
 and research them with the same pipeline. The article itself never counts as evidence."""
 import hashlib
 import json
+import unicodedata
 from uuid import uuid4
 
 from schemas import AtomicClaim, Extraction, Report
@@ -15,8 +16,18 @@ class ArticleUnavailable(Exception):
     """The URL could not be fetched safely as a readable article."""
 
 
+# Models often drop or straighten apostrophes and quote marks ("NASAs" for "NASA’s"). Only these
+# characters are ignored; every letter, digit and word must still match the article in order.
+IGNORED_MARKS = str.maketrans('', '', "'’‘`\"“”")
+DASHES = str.maketrans({'–': '-', '—': '-', '‑': '-', '‐': '-'})
+
+
+def loose(text: str) -> str:
+    return normalized(unicodedata.normalize('NFKC', text).translate(IGNORED_MARKS).translate(DASHES))
+
+
 def verbatim(value: str, article: str) -> bool:
-    return bool(value.strip()) and normalized(value) in normalized(article)
+    return bool(value.strip()) and loose(value) in loose(article)
 
 
 async def run_article_pipeline(url, provider, fetch=fetch_text) -> Report:

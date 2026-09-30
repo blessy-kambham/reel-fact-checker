@@ -50,8 +50,10 @@ def test_both_directions_and_quote_check():
 def test_fabricated_citations_rejected(draft):
     provider = FakeProvider(draft=draft)
     result = asyncio.run(research_claim(CLAIM, provider, fake_fetch))
-    assert result.verdict == 'UNVERIFIABLE' and result.status == 'incomplete'
+    # Invented IDs are rejected before any verifier call; with nothing else selected, no evidence remains.
+    assert result.verdict == 'UNVERIFIABLE' and result.withheld_reason == 'no_relevant_evidence'
     assert result.evidence == [] and provider.verifier_calls == 0
+    assert result.rejected_citations[0].verification_code in ('unknown_source', 'unknown_excerpt')
 
 def test_semantic_rejection():
     result = asyncio.run(research_claim(CLAIM, FakeProvider(approved=False), fake_fetch))

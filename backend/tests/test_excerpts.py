@@ -112,7 +112,9 @@ def test_pipeline_passes_excerpts_and_keeps_good_evidence_when_id_is_invalid():
     async def fetch(url):
         return url,'Water freezes at 0°C. Synthetic fixture only.'
     result = asyncio.run(research_claim(AtomicClaim(text='Water freezes.',context='Fixture'),Provider(),fetch))
-    assert result.verdict == 'UNVERIFIABLE' and result.status == 'incomplete'
+    # An invented excerpt ID is shown as rejected but no longer blocks the verdict (approved 2026-09-30).
+    assert result.withheld_reason != 'citation_failed' and result.status == 'complete'
     assert len(result.evidence) == len(result.rejected_citations) == 1
     assert result.evidence[0].quote == 'Water freezes at 0°C.'
     assert result.rejected_citations[0].verification_code == 'unknown_excerpt'
+    assert any('were ignored' in text for text in result.limitations)

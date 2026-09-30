@@ -156,3 +156,12 @@ def test_article_route_turns_unreadable_links_into_422(client, monkeypatch):
 @pytest.mark.parametrize('payload', [{}, {'url': ''}, {'url': 'x' * 2001}, {'url': ARTICLE_URL, 'claim': 'extra'}])
 def test_article_route_validates_input(client, payload):
     assert client.post('/fact-check-article', json=payload).status_code == 422
+
+
+def test_dropped_apostrophes_and_straight_quotes_still_count_as_verbatim():
+    from services.article import verbatim
+    page = 'NASA’s SLS rocket lifted off from the agency’s Kennedy Space Center — on schedule, “flawlessly”.'
+    assert verbatim('NASAs SLS rocket lifted off from the agencys Kennedy Space Center - on schedule, "flawlessly"', page)
+    assert verbatim("NASA's SLS rocket lifted off", page)
+    assert not verbatim('NASAs SLS rocket lifted off from Cape Canaveral', page)
+    assert not verbatim('NASA SLS rocket lifted', page.replace('’s', ' s'))  # A changed word is still refused.

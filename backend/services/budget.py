@@ -13,6 +13,8 @@ from services.providers import ProviderFailure
 # USD per token (input, output). Reservations are only meaningful for models listed here.
 PRICES = {'gpt-4.1-mini': (Decimal('0.0000004'), Decimal('0.0000016'))}
 MAX_OUTPUT_TOKENS = 3000
+BYTES_PER_TOKEN = 3
+OVERHEAD_TOKENS = 2000
 
 
 class BudgetExceeded(ProviderFailure):
@@ -65,8 +67,10 @@ class Budget:
 
     def reserve(self, instructions, data, schema):
         self.ensure_active()
-        # Conservative byte bound plus protocol overhead. Failed calls retain their reservation.
-        tokens = len(json.dumps([instructions, data, schema.model_json_schema()], ensure_ascii=True).encode()) + 10000
+        # About one token per three bytes of ASCII-escaped JSON (English averages about four), plus
+        # protocol overhead. Conservative, not exact. Failed calls retain their reservation.
+        size = len(json.dumps([instructions, data, schema.model_json_schema()], ensure_ascii=True).encode())
+        tokens = -(-size // BYTES_PER_TOKEN) + OVERHEAD_TOKENS
         cost = Decimal(tokens) * self.input_price + Decimal(MAX_OUTPUT_TOKENS) * self.output_price
         if self.reserved + cost > self.max_usd:
             self.stop()

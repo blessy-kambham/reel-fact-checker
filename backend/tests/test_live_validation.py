@@ -15,7 +15,7 @@ from schemas import Extraction
 def test_budget_refuses_oversized_request():
     budget = Budget()
     with pytest.raises(ProviderFailure, match='budget'):
-        budget.reserve('test', 'x' * 300000, Extraction)
+        budget.reserve('test', 'x' * 1000000, Extraction)
     assert budget.reserved == 0
 
 
@@ -133,7 +133,7 @@ def test_budget_stop_is_persistent_and_blocks_smaller_calls_and_searches(tmp_pat
     path = tmp_path / 'budget.json'
     budget = Budget(path, search_limit=8)
     with pytest.raises(ProviderFailure):
-        budget.reserve('test', 'x' * 300000, Extraction)
+        budget.reserve('test', 'x' * 1000000, Extraction)
     resumed = Budget(path)
     assert resumed.stopped and resumed.search_limit == 8
     with pytest.raises(ProviderFailure):

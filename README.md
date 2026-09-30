@@ -336,3 +336,7 @@ The 2026-09-30 compound retest issued TRUE and FALSE correctly, but under the sa
 - **Browser tests.** Ten Playwright tests run against a mocked backend (no keys, network or cost): demo and JSON download, verdict-evidence grouping, single-source note, withheld reasons, incomplete coverage, loading state, errors, unreachable backend, article mode, saved reports, and print. Run `npm ci && npx playwright install chromium && npm run test:e2e` in `frontend/`. GitHub CI does not run them yet: adding the job to `.github/workflows/checks.yml` has to be done by hand.
 
 223 backend tests, 12 policy cases, 10 browser tests and the frontend build pass. None of these features has been exercised against the live providers yet.
+
+### Live checkpoint 1 and follow-up fixes
+
+Checkpoint 1 (four requests, $0.108) returned correct FALSE verdicts for the far-side sunlight assertion and for Pluto, and confirmed off-topic citations no longer appear. It also showed that one invented excerpt ID could withhold a supported verdict, that general facts could be labelled as contradictions, that article claims failed the verbatim check over apostrophes, and that budget reservations were about four times too high. All four are fixed offline; details are in `docs/TEXT_VALIDATION.md`. 229 backend tests, 13 policy cases, 10 browser tests and the frontend build pass.
