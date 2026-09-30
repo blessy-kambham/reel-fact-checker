@@ -2,7 +2,7 @@ import asyncio
 import json
 import socket
 import pytest
-from schemas import ExtractionCoverage, AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
+from schemas import VerdictDecision, EvidenceRelation, ExtractionCoverage, AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
 from services.pipeline import research_claim, run_pipeline, verify_citation
 from services.providers import ProviderFailure
 from services.fetcher import validate_url, PublicResolver
@@ -29,6 +29,10 @@ class FakeProvider:
             return Extraction(intent='FACTUAL', claims=self.claims, omitted_claims=False, note='')
         if schema is Analysis:
             return Analysis(verdict=self.verdict, evidence=[self.draft], limitations=[])
+        if schema is VerdictDecision:
+            return VerdictDecision(verdict=self.verdict, evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
+        if schema is EvidenceRelation:
+            return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[self.draft.stance], reason='Scripted relation')
         self.verifier_calls += 1
         return CitationJudgment(supports_attribution=self.approved, stance_matches=True, reason='Test judgment')
 

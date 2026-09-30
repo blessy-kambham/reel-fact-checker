@@ -2,7 +2,7 @@
 import asyncio
 import pytest
 from pydantic import ValidationError
-from schemas import Source, EvidenceSelection, CitationJudgment, Analysis, AtomicClaim
+from schemas import VerdictDecision, EvidenceRelation, Source, EvidenceSelection, CitationJudgment, Analysis, AtomicClaim
 from services.excerpts import source_excerpts
 from services.pipeline import verify_selection, research_claim
 
@@ -17,6 +17,10 @@ class Judge:
         self.inputs = []
     async def structured(self, schema, instructions, data):
         import json
+        if schema is VerdictDecision:
+            return VerdictDecision(verdict='TRUE', evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
+        if schema is EvidenceRelation:
+            return EvidenceRelation(relation='SUPPORTS', reason='Scripted relation')
         assert schema is CitationJudgment
         self.inputs.append(json.loads(data))
         return CitationJudgment(supports_attribution=self.approved, stance_matches=True,reason='Scripted attribution check')

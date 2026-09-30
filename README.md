@@ -117,7 +117,7 @@ cd ../frontend
 npm run build
 ```
 
-123 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
+135 offline tests pass, the frontend production build passes, and the fictional demo was verified through the browser. Tests use fake providers, not real API accounts. They cover input validation, disabled live mode, secret redaction, fictional demo labeling, supporting/contradicting searches, invented source/excerpt IDs, missing quotes, semantic citation rejection, missing pages, provider failures, partial results, concurrency limits, nonfactual content, and public URL/DNS restrictions.
 
 This is engineering regression coverage, not an accuracy benchmark. All 12 starter reference claims have now been attempted across versions. Two of the latest seven were blocked during analysis by the validation budget guard; successful validation remains incomplete. Independent label review, citation precision evaluation, and broader live integration validation remain. The installed Starlette test client currently emits an httpx deprecation warning; tests pass.
 
@@ -292,3 +292,24 @@ This verifies textual coverage, not factual truth, atomicity, or valid causal re
 
 
 Live mapping retest: both compound Moon assertions were preserved and researched. The no-sunlight assertion returned FALSE; the same-side assertion remained UNVERIFIABLE due to conflicting evidence labels. All eight selected citations passed verification. This confirms the mapping path for this case; text validation remains incomplete. Shared allowance usage is $0.0561984 and eight searches. Details are in `docs/TEXT_VALIDATION.md`.
+
+
+### Local evidence relationship follow-up
+
+Each selected quote now receives a separate relationship classification against the specific target assertion. This call sees the quote and full page, but not the analyst's verdict, statement or proposed stance. SUPPORTS/CONTRADICTS/BACKGROUND map to FOR/AGAINST/CONTEXT; IRRELEVANT and UNCERTAIN are excluded. A separate attribution-and-stance verifier must still approve the result. Reports retain `proposed_stance` and `relation_reason` for audit. Failed or unavailable checks continue to withhold verdicts.
+
+This adds up to six model calls per claim and has not been validated live. The analyst's candidate verdict still passes through conservative evidence gates; no verdict is automatically flipped when a stance changes. 129 offline tests, 12 policy cases and the frontend build pass. These changes are local pending a later GitHub update.
+
+
+### Latest local live results
+
+The new relationship classifier was tested live: Moon light and Moon rotation both returned FALSE/complete; all 24 citations across three requests passed automated verification. The compound case still exposed verdict-scope contamination: the same-side assertion was labeled MISLEADING while its explanation discussed the separate sunlight assertion. Source authority and independence also remain unresolved. Text validation is not complete.
+
+The run used approximately $0.07821 and eight Tavily searches, with no retries or provider failures. Changes and results remain local; GitHub has not been updated. See `docs/TEXT_VALIDATION.md` for the case table and limitations.
+
+
+### Local claim-specific verdict stage
+
+Final verdicts now come from a separate call receiving only the target assertion and verified evidence. The analyst's candidate verdict, full submission context and research-stage limitations do not feed that decision. Each non-UNVERIFIABLE decision must reference supplied evidence IDs; unknown/missing IDs, unsupported stance combinations or provider failures withhold the verdict. Previously verified evidence remains available for review. Research-stage free-form limitations are excluded from the final report to prevent neighboring-claim explanations from reappearing there; application-generated retrieval and verification warnings remain.
+
+This adds at most one model call per claim after successful citation checks. It does not guarantee semantic isolation: evidence statements can still discuss neighboring facts, and ambiguous pronouns may remain unresolved. 135 tests and 12 policy cases pass offline. Live validation of this stage is pending. All work remains local; GitHub is unchanged.

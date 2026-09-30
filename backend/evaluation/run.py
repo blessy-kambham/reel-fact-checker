@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from schemas import Analysis, AtomicClaim, CitationJudgment
+from schemas import VerdictDecision, EvidenceRelation, Analysis, AtomicClaim, CitationJudgment
 from services.pipeline import research_claim
 from services.providers import ProviderFailure
 
@@ -35,6 +35,11 @@ class FixtureProvider:
     async def structured(self, schema, instructions, data):
         if schema is Analysis:
             return Analysis.model_validate(self.case['candidate'])
+        if schema is VerdictDecision:
+            return VerdictDecision(verdict=self.case['candidate']['verdict'], evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
+        if schema is EvidenceRelation:
+            item = self.case['candidate']['evidence'][self.judgments]
+            return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item['stance']], reason='Scripted relation')
         if schema is CitationJudgment:
             self.judgments += 1
             approved = json.loads(data)['statement'] not in self.case.get('rejected_statements', [])

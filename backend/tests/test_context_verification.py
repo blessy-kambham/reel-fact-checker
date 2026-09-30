@@ -3,7 +3,7 @@ import asyncio
 import json
 import pytest
 from pydantic import ValidationError
-from schemas import Analysis, AtomicClaim, CitationJudgment, EvidenceSelection
+from schemas import VerdictDecision, EvidenceRelation, Analysis, AtomicClaim, CitationJudgment, EvidenceSelection
 from services.pipeline import research_claim
 
 PAGE = 'A freezing point is the temperature where a liquid becomes solid. The fictional sample freezes at 0°C at standard pressure.'
@@ -18,6 +18,11 @@ class Provider:
     async def structured(self, schema, instructions, data):
         if schema is Analysis:
             return Analysis(verdict='TRUE', evidence=self.evidence, limitations=[])
+        if schema is VerdictDecision:
+            return VerdictDecision(verdict='TRUE', evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
+        if schema is EvidenceRelation:
+            item = self.evidence[len(self.checks)]
+            return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item.stance], reason='Scripted relation')
         assert schema is CitationJudgment
         self.checks.append(json.loads(data))
         return CitationJudgment(supports_attribution=self.attribution,

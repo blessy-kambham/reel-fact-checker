@@ -42,6 +42,14 @@ class Analysis(StrictModel):
     evidence: list[EvidenceSelection] = Field(max_length=6)
     limitations: list[str] = Field(max_length=6)
 
+class VerdictDecision(StrictModel):
+    verdict: Verdict
+    evidence_ids: list[str] = Field(max_length=6, description='IDs from the verified evidence that justify this verdict. Never invent IDs.')
+
+class EvidenceRelation(StrictModel):
+    relation: Literal['SUPPORTS', 'CONTRADICTS', 'BACKGROUND', 'IRRELEVANT', 'UNCERTAIN']
+    reason: str
+
 class CitationJudgment(StrictModel):
     supports_attribution: bool = Field(description='The quote supports the attributed statement in the context of the full page, without distortion.')
     stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim; relevant background may be CONTEXT without proving the claim.')
@@ -65,7 +73,9 @@ class Citation(EvidenceDraft):
     url: str | None
     verified: bool
     verification: str
-    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable'] = 'not_checked'
+    proposed_stance: Literal['FOR', 'AGAINST', 'CONTEXT'] | None = None
+    relation_reason: str | None = None
+    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable', 'relation_unresolved'] = 'not_checked'
     retrieved_at: str | None = None
     source_text_sha256: str | None = None
 
