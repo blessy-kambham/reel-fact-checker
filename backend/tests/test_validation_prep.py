@@ -235,3 +235,11 @@ def test_summary_counts_issued_and_withheld_verdicts():
     assert result['withheld_reasons'] == {'unknown_evidence_ids': 1}
     assert result['code_fingerprints'] == ['abc']
     assert result['results'][0]['claims'][1]['decision_verdict'] == 'TRUE'
+
+
+def test_every_paid_research_route_is_traced():
+    import main
+    research_routes = {route.path for route in main.app.routes
+                       if 'POST' in getattr(route, 'methods', set()) and route.path.startswith('/fact-check')}
+    assert research_routes == {'/fact-check', '/fact-check-article'}
+    assert research_routes <= live.LIVE_PATHS

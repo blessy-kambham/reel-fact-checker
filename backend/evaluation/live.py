@@ -1,4 +1,4 @@
-"""Local validation runner for the real /fact-check route.
+"""Local validation runner for the real research routes (/fact-check and /fact-check-article).
 
   python -m evaluation.live
       Offline preparation (the default): fingerprints the exact code, copies it beside the traces,
@@ -32,6 +32,8 @@ ALLOWANCES = 'allowances'
 MAX_USD_CEILING = Decimal('1.00')
 MAX_SEARCH_CEILING = 50
 VALIDATION_MODEL = 'gpt-4.1-mini'
+# Every route that runs paid research must be traced; a test checks this against the app's routes.
+LIVE_PATHS = frozenset({'/fact-check', '/fact-check-article'})
 
 class AuditProvider(Providers):
     def __init__(self, budget, trace):
@@ -155,7 +157,7 @@ def create_app(allowance, max_usd, max_searches):
 
     @main.app.middleware('http')
     async def capture(request, call_next):
-        if request.url.path != '/fact-check' or request.method != 'POST':
+        if request.url.path not in LIVE_PATHS or request.method != 'POST':
             return await call_next(request)
         if active['trace'] is not None:
             from fastapi.responses import JSONResponse
@@ -166,7 +168,7 @@ def create_app(allowance, max_usd, max_searches):
             return await call_next(request)
         if not isinstance(payload, dict):
             return await call_next(request)
-        trace = {'submitted_text': payload.get('claim'), 'allowance': allowance, 'code_fingerprint': code['fingerprint'],
+        trace = {'submitted_text': payload.get('claim') or payload.get('url'), 'route': request.url.path, 'allowance': allowance, 'code_fingerprint': code['fingerprint'],
                  'git_head': code['git_head'], 'snapshot_dir': code['snapshot_dir'],
                  'model': [], 'searches': [], 'confidence': None,
                  'confidence_note': 'Not calibrated; no percentage generated.'}
