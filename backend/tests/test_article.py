@@ -165,3 +165,31 @@ def test_dropped_apostrophes_and_straight_quotes_still_count_as_verbatim():
     assert verbatim("NASA's SLS rocket lifted off", page)
     assert not verbatim('NASAs SLS rocket lifted off from Cape Canaveral', page)
     assert not verbatim('NASA SLS rocket lifted', page.replace('’s', ' s'))  # A changed word is still refused.
+
+
+def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check():
+    # Exact failure from live checkpoint 2: the model returned U+0019 for U+2019.
+    import asyncio
+    from types import SimpleNamespace
+    from services.article import verbatim
+    from services.providers import Providers, repair_text
+    page = 'NASA’s SLS rocket lifted off from Launch Pad 39B at the agency’s Kennedy Space Center — on “schedule”.'
+    corrupted = 'NASA\x19s SLS rocket lifted off from Launch Pad 39B at the agency\x19s Kennedy Space Center \x14 on \x1cschedule\x1d.'
+    assert not verbatim(corrupted, page)
+    assert repair_text(corrupted) == page and verbatim(repair_text(corrupted), page)
+
+    extraction = Extraction(intent='FACTUAL', claims=[AtomicClaim(text=corrupted, context='Orion\x19s module')],
+                            omitted_claims=False, note='It\x19s fine')
+    repaired = repair_text(extraction)
+    assert repaired.claims[0].text == page and repaired.claims[0].context == 'Orion’s module' and repaired.note == 'It’s fine'
+
+    class Responses:
+        async def parse(self, **kwargs):
+            return SimpleNamespace(output_parsed=extraction, usage=None)
+    import os
+    os.environ.setdefault('OPENAI_API_KEY', 'offline-test')
+    os.environ.setdefault('OPENAI_MODEL', 'gpt-4.1-mini')
+    provider = Providers()
+    provider.client = SimpleNamespace(responses=Responses())
+    result = asyncio.run(provider.structured(Extraction, 'extract', 'text'))
+    assert '\x19' not in result.model_dump_json() and result.claims[0].text == page

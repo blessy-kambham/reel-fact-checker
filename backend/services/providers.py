@@ -9,6 +9,23 @@ class ProviderFailure(Exception):
     pass
 
 
+# Curly punctuation sometimes comes back from the model with its high byte lost (U+2019 -> U+0019),
+# which breaks word-for-word checks and shows as invisible characters. These control characters
+# never belong in text, so they are mapped back to the punctuation they came from.
+_REPAIR = str.maketrans({'\x13': '–', '\x14': '—', '\x18': '‘', '\x19': '’', '\x1c': '“', '\x1d': '”'})
+
+
+def repair_text(value):
+    """Repair corrupted punctuation in every string of a parsed model output."""
+    if isinstance(value, str):
+        return value.translate(_REPAIR)
+    if isinstance(value, list):
+        return [repair_text(item) for item in value]
+    if isinstance(value, BaseModel):
+        return type(value).model_validate({name: repair_text(getattr(value, name)) for name in type(value).model_fields})
+    return value
+
+
 def missing_settings() -> list[str]:
     return [key for key in ('OPENAI_API_KEY', 'OPENAI_MODEL', 'TAVILY_API_KEY') if not os.getenv(key, '').strip()]
 
@@ -41,7 +58,7 @@ class Providers:
                     spending.reconcile(reservation, response.usage.input_tokens, response.usage.output_tokens)
             if response.output_parsed is None:
                 raise ProviderFailure('The model refused or returned incomplete structured output.')
-            return response.output_parsed
+            return repair_text(response.output_parsed)
         except ProviderFailure:
             raise
         except Exception as exc:
@@ -70,7 +87,7 @@ class Providers:
                     spending.reconcile(reservation, response.usage.input_tokens, response.usage.output_tokens)
             if response.output_parsed is None:
                 raise ProviderFailure('The model refused or returned incomplete structured output.')
-            return response.output_parsed
+            return repair_text(response.output_parsed)
         except ProviderFailure:
             raise
         except Exception as exc:
