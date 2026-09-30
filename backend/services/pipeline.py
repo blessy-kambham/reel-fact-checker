@@ -38,7 +38,8 @@ WITHHELD_MESSAGES = {
     'provider_failure': 'A research provider failed, so the verdict was withheld.',
     'spending_limit': 'The spending limit was reached before this claim finished, so the verdict was withheld.',
 }
-INVALID_REFERENCE_CODES = frozenset({'unknown_source', 'unknown_excerpt', 'empty_quote'})
+# Proposals that are the analyst's slips, not evidence problems: shown as rejected, never block a verdict.
+INVALID_REFERENCE_CODES = frozenset({'unknown_source', 'unknown_excerpt', 'empty_quote', 'relation_unresolved'})
 SINGLE_SOURCE_NOTE = 'This verdict rests on a single web page. Check that source before relying on it.'
 # Reasons that reflect a legitimate research outcome rather than a failed or rejected check.
 COMPLETE_WITHHELD_REASONS = {'no_relevant_evidence', 'conflicting_evidence'}
@@ -229,13 +230,13 @@ async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset())
     citations = []
     for draft in analysis.evidence:
         citations.append(await verify_selection(draft, sources, excerpts, provider, claim.text))
-    # A proposal pointing at a source or excerpt that was never supplied is a bookkeeping slip by the
-    # analyst, not evidence: it is shown as rejected but does not block a verdict. Every other failed
-    # check (misattribution, relation or verification unavailable) still withholds the verdict.
+    # A proposal pointing at a source or excerpt that was never supplied, or at a passage the relation
+    # check found irrelevant or unresolvable for this claim, is an analyst slip, not evidence: it is shown
+    # as rejected but does not block a verdict. Misattribution and unavailable checks still withhold it.
     ignored = [c for c in citations if not c.verified and c.verification_code in INVALID_REFERENCE_CODES]
     failed = any(not c.verified and c.verification_code not in INVALID_REFERENCE_CODES for c in citations)
     if ignored:
-        warnings.append(f'{len(ignored)} proposed citation(s) referred to material that was not supplied and were ignored.')
+        warnings.append(f'{len(ignored)} proposed citation(s) were not supplied material or did not concern this claim, and were ignored.')
     if failed:
         warnings.append(f'{sum(not c.verified for c in citations) - len(ignored)} citation(s) failed validation and were excluded.')
     usable = [citation.model_copy(update={'evidence_id': f'E{i + 1}'})

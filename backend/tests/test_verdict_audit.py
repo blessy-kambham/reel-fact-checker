@@ -244,3 +244,25 @@ def test_relation_prompt_treats_general_facts_as_background():
     check(Capture())
     assert 'General facts about the subject' in prompts['EvidenceRelation']
     assert 'BACKGROUND, not CONTRADICTS' in prompts['EvidenceRelation']
+
+
+def test_off_topic_pick_is_ignored_but_an_unavailable_relation_check_still_withholds():
+    from services.providers import ProviderFailure
+    off_topic = DRAFT.model_copy(update={'statement': 'The building has a blue roof.'})
+    class Relation(Scripted):
+        def __init__(self, outcome, **kwargs):
+            super().__init__(**kwargs)
+            self.outcome = outcome
+        async def structured(self, schema, instructions, data):
+            if schema is EvidenceRelation and self.relations == 1:
+                self.relations += 1
+                if self.outcome == 'fail':
+                    raise ProviderFailure('unavailable')
+                return EvidenceRelation(relation='IRRELEVANT', reason='About something else')
+            return await super().structured(schema, instructions, data)
+    decision = VerdictDecision(verdict='TRUE', evidence_ids=['E1'])
+    ignored = check(Relation('irrelevant', decision=decision, drafts=[DRAFT, off_topic]))
+    assert ignored.verdict == 'TRUE' and ignored.verdict_state == 'issued'
+    assert [c.verification_code for c in ignored.rejected_citations] == ['relation_unresolved']
+    withheld = check(Relation('fail', decision=decision, drafts=[DRAFT, off_topic]))
+    assert withheld.withheld_reason == 'citation_failed'
