@@ -248,6 +248,8 @@ def client(monkeypatch, tmp_path):
 
 
 def test_video_needs_its_tools_and_says_how_to_install_them(client, monkeypatch):
+    # ffmpeg present (CI runners may lack it), transcription missing: the message names the missing piece.
+    monkeypatch.setattr(main.media, 'tools_available', lambda: True)
     monkeypatch.setattr(main.LocalWhisper, 'installed', staticmethod(lambda: False))
     body = client.get('/config').json()
     assert body['video_ready'] is False and 'requirements-video.txt' in body['video_message']

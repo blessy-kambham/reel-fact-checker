@@ -189,7 +189,7 @@ def test_dropped_apostrophes_and_straight_quotes_still_count_as_verbatim():
     assert not verbatim('NASA SLS rocket lifted', page.replace('’s', ' s'))  # A changed word is still refused.
 
 
-def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check():
+def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check(monkeypatch):
     # Exact failure from live checkpoint 2: the model returned U+0019 for U+2019.
     import asyncio
     from types import SimpleNamespace
@@ -208,9 +208,9 @@ def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check():
     class Responses:
         async def parse(self, **kwargs):
             return SimpleNamespace(output_parsed=extraction, usage=None)
-    import os
-    os.environ.setdefault('OPENAI_API_KEY', 'offline-test')
-    os.environ.setdefault('OPENAI_MODEL', 'gpt-4.1-mini')
+    # CI sets OPENAI_API_KEY to an empty string, so set it explicitly rather than only when absent.
+    monkeypatch.setenv('OPENAI_API_KEY', 'offline-test')
+    monkeypatch.setenv('OPENAI_MODEL', 'gpt-4.1-mini')
     provider = Providers()
     provider.client = SimpleNamespace(responses=Responses())
     result = asyncio.run(provider.structured(Extraction, 'extract', 'text'))
