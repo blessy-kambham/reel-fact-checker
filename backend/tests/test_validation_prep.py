@@ -228,6 +228,7 @@ def test_summary_counts_issued_and_withheld_verdicts():
                'withheld_reason': 'unknown_evidence_ids', 'decision_verdict': 'TRUE', 'verdict_evidence_ids': []}]
     result = summarize([{'response': {'claims': claims}, 'code_fingerprint': 'abc', 'allowance': 'retest-1'}], [])
     assert result['issued_verdicts'] == 1
+    assert result['single_source_verdicts'] == 0
     assert result['withheld_reasons'] == {'unknown_evidence_ids': 1}
     assert result['code_fingerprints'] == ['abc']
     assert result['results'][0]['claims'][1]['decision_verdict'] == 'TRUE'

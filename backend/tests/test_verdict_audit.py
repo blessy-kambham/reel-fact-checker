@@ -167,3 +167,52 @@ def test_coverage_failure_is_named():
     report = asyncio.run(run_pipeline('Original claim text.', Uncovered(), fake_fetch))
     assert report.claims[0].withheld_reason == 'coverage_failed'
     assert report.claims[0].verdict_state == 'withheld'
+
+
+class TwoPages(Scripted):
+    async def search(self, query):
+        self.queries.append(query)
+        page = 'b' if 'contradicting' in query else 'a'
+        return [{'url': f'https://example.org/{page}', 'title': f'Page {page}'}]
+
+
+def test_single_page_verdict_is_flagged():
+    from services.pipeline import SINGLE_SOURCE_NOTE
+    result = check(Scripted(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1'])))
+    assert result.verdict == 'TRUE' and result.verdict_source_count == 1
+    assert SINGLE_SOURCE_NOTE in result.limitations
+
+
+def test_verdict_from_two_pages_is_not_flagged():
+    from services.pipeline import SINGLE_SOURCE_NOTE
+    second = DRAFT.model_copy(update={'source_id': 'S2', 'excerpt_id': 'S2:E1'})
+    result = check(TwoPages(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1', 'E2']), drafts=[DRAFT, second]))
+    assert result.verdict == 'TRUE' and result.verdict_source_count == 2
+    assert SINGLE_SOURCE_NOTE not in result.limitations
+
+
+def test_withheld_or_unverifiable_verdicts_are_not_flagged():
+    from services.pipeline import SINGLE_SOURCE_NOTE
+    withheld = check(Scripted(decision=VerdictDecision(verdict='FALSE', evidence_ids=['E1'])))
+    assert withheld.verdict_source_count is None and SINGLE_SOURCE_NOTE not in withheld.limitations
+    unverifiable = check(Scripted(decision=VerdictDecision(verdict='UNVERIFIABLE', evidence_ids=['E1'])))
+    assert unverifiable.verdict_source_count == 1 and SINGLE_SOURCE_NOTE not in unverifiable.limitations
+
+
+def test_prompts_carry_no_validation_case_examples():
+    import inspect
+    import services.pipeline as pipeline
+    source = inspect.getsource(pipeline).casefold()
+    for word in ('moon', 'sunlight', 'eiffel', 'pluto', 'great wall'):
+        assert word not in source
+
+
+def test_relation_and_analysis_prompts_exclude_neighbouring_assertions():
+    prompts = {}
+    class Capture(Scripted):
+        async def structured(self, schema, instructions, data):
+            prompts[schema.__name__] = instructions
+            return await super().structured(schema, instructions, data)
+    check(Capture())
+    assert 'evidence about another claim is never SUPPORTS' in prompts['EvidenceRelation']
+    assert 'never select evidence about them' in prompts['Analysis']

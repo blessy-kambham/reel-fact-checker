@@ -55,9 +55,24 @@ export default function Report({ report }) {
       <h3>{claim.claim}</h3>
       <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'EXAMPLE: ' : ''}{claim.verdict}</span>
       {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
-      {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict_evidence_ids?.length > 0 && <p className="report-meta">Verdict based on {claim.verdict_evidence_ids.join(', ')}</p>}
+      {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
       <p className="report-meta">{claim.sources_checked} pages retrieved · Confidence is not calibrated</p>
-      <div className="evidence-grid">{claim.evidence.map((item, i) => <Evidence key={i} item={item} demo={report.mode === 'demo'} cited={claim.verdict_state === 'issued' && claim.verdict_evidence_ids?.includes(item.evidence_id)} />)}</div>
+      {(() => {
+        const demo = report.mode === 'demo';
+        const usedIds = !demo && claim.verdict_state === 'issued' ? claim.verdict_evidence_ids || [] : [];
+        const used = claim.evidence.filter(item => usedIds.includes(item.evidence_id));
+        const other = claim.evidence.filter(item => !usedIds.includes(item.evidence_id));
+        if (!used.length) return <div className="evidence-grid">{claim.evidence.map((item, i) => <Evidence key={i} item={item} demo={demo} />)}</div>;
+        return <>
+          <p className="evidence-group">Evidence used for the verdict</p>
+          <div className="evidence-grid">{used.map((item, i) => <Evidence key={i} item={item} demo={demo} cited />)}</div>
+          {other.length > 0 && <details className="other-evidence">
+            <summary>Other verified evidence ({other.length}) — not used for the verdict</summary>
+            <p>These passages passed citation checks but the verdict did not rely on them. Some may concern a different assertion.</p>
+            <div className="evidence-grid">{other.map((item, i) => <Evidence key={i} item={item} demo={demo} />)}</div>
+          </details>}
+        </>;
+      })()}
       {!claim.evidence.length && <p>No verified evidence is available for this claim.</p>}
       {claim.rejected_citations?.length > 0 && <details className="rejected-citations">
         <summary>Excluded citations ({claim.rejected_citations.length}) — not evidence</summary>

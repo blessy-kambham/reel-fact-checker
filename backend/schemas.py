@@ -102,6 +102,7 @@ class ClaimResult(StrictModel):
     decision_verdict: Verdict | None = Field(default=None, description='Raw verdict returned by the verdict stage; None when it was not called.')
     decision_evidence_ids: list[str] = Field(default_factory=list, description='Raw evidence IDs returned by the verdict stage, including rejected ones.')
     verdict_evidence_ids: list[str] = Field(default_factory=list, description='Evidence IDs justifying an issued verdict; empty when withheld.')
+    verdict_source_count: int | None = Field(default=None, description='Distinct pages behind an issued verdict; None when withheld.')
 
 class InputSpan(StrictModel):
     start: int

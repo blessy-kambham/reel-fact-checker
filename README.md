@@ -323,3 +323,7 @@ Every claim now states whether its verdict was `issued` or `withheld`. Withheld 
 The validation runner now prepares offline by default, snapshots the exact code including untracked files, and uses named allowances tied to that code. Offline tests cover reservation and tracing of the relation and verdict calls, a budget stop before the verdict call, persistent stops across restarts, search caps and zero retries. Found while testing: when the search cap stops an allowance after one search, the analysis call is refused and the report withholds the claim as `provider_failure`; no call is made.
 
 175 offline tests, 12 policy cases and the frontend build pass. None of this has been validated live.
+
+### Off-topic evidence and single-source verdicts
+
+The 2026-09-30 compound retest issued TRUE and FALSE correctly, but under the same-side assertion the report listed citations about the neighbouring sunlight assertion as support. The report now shows the evidence a verdict used first and groups the rest as other verified evidence, not used for the verdict. The analysis and relation prompts now exclude evidence about other assertions, and every prompt example is fictional; earlier examples mirrored validation cases. Issued verdicts record how many distinct pages they rest on, and verdicts resting on one page carry a visible single-source note. 180 offline tests, 12 policy cases and the frontend build pass. The prompt changes are not yet validated live.

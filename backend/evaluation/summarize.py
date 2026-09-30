@@ -29,7 +29,8 @@ def summarize(traces, cases):
             'rejections': [{'code':c.get('verification_code'), 'reason':c['verification'], 'quote':c['quote']} for c in rejected],
             'claims': [{'claim': c.get('claim'), 'verdict': c.get('verdict'), 'verdict_state': c.get('verdict_state'),
                         'withheld_reason': c.get('withheld_reason'), 'decision_verdict': c.get('decision_verdict'),
-                        'verdict_evidence_ids': c.get('verdict_evidence_ids', [])} for c in claims],
+                        'verdict_evidence_ids': c.get('verdict_evidence_ids', []),
+                        'verdict_source_count': c.get('verdict_source_count')} for c in claims],
             'code_fingerprint': trace.get('code_fingerprint'), 'allowance': trace.get('allowance'),
             'latency_seconds': trace.get('latency_seconds'), 'usage':report.get('usage', {})})
     accepted = sum(r['accepted_citations'] for r in rows)
@@ -45,6 +46,7 @@ def summarize(traces, cases):
         'extraction_failures':sum(r['extraction_failure'] for r in rows),
         'provider_failures':sum(r['provider_failures'] for r in rows),
         'issued_verdicts':sum(c.get('verdict_state') == 'issued' for r in rows for c in r['claims']),
+        'single_source_verdicts':sum(c.get('verdict_source_count') == 1 and c.get('verdict') != 'UNVERIFIABLE' for r in rows for c in r['claims']),
         'withheld_reasons':dict(sorted(Counter(c['withheld_reason'] for r in rows for c in r['claims'] if c.get('withheld_reason')).items())),
         'code_fingerprints':sorted({r['code_fingerprint'] for r in rows if r['code_fingerprint']}),
         'human_reviewed_unsupported_accepted_citations': None,
