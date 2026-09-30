@@ -1,0 +1,158 @@
+"""Article URL ingestion, offline: fixture pages instead of the web."""
+import asyncio
+import json
+import pytest
+from fastapi.testclient import TestClient
+import main
+from schemas import AtomicClaim, Extraction
+from services.article import ArticleUnavailable, run_article_pipeline
+from services.fetcher import validate_url
+from tests.test_pipeline import FakeProvider, PAGE
+
+ARTICLE_URL = 'https://news.example.org/story'
+ARTICLE = ('City officials said the fictional Harbor Bridge closed on March 3 after inspectors found cracked welds. '
+           'Repairs are expected to take eight months. Local shops report fewer visitors since the closure.')
+CLAIM_1 = 'the fictional Harbor Bridge closed on March 3 after inspectors found cracked welds'
+CLAIM_2 = 'Repairs are expected to take eight months'
+
+
+class ArticleProvider(FakeProvider):
+    def __init__(self, claims, intent='FACTUAL', search_urls=None, **kwargs):
+        super().__init__(**kwargs)
+        self.article_claims, self.intent = claims, intent
+        self.search_urls = search_urls or ['https://evidence.example.org/report']
+        self.extraction_input = None
+    async def search(self, query):
+        self.queries.append(query)
+        return [{'url': url, 'title': 'Result'} for url in self.search_urls]
+    async def structured(self, schema, instructions, data):
+        if schema is Extraction:
+            self.extraction_input = json.loads(data)
+            return Extraction(intent=self.intent, claims=self.article_claims, omitted_claims=True, note='')
+        return await super().structured(schema, instructions, data)
+
+
+def fetcher(pages):
+    fetched = []
+    async def fetch(url):
+        fetched.append(url)
+        if url not in pages:
+            raise ValueError('unreadable')
+        return pages[url]
+    fetch.fetched = fetched
+    return fetch
+
+
+def run(provider, fetch):
+    return asyncio.run(run_article_pipeline(ARTICLE_URL, provider, fetch))
+
+
+def test_article_claims_are_researched_even_when_others_are_omitted():
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_1, context=''), AtomicClaim(text=CLAIM_2, context='')])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)}))
+    assert report.input_type == 'article' and report.source_url == ARTICLE_URL and report.source_sha256
+    assert report.coverage_status == 'passed' and report.omitted_claims
+    assert [c.claim for c in report.claims] == [CLAIM_1, CLAIM_2]
+    assert all(c.sources_checked == 1 for c in report.claims)
+    assert provider.extraction_input == {'article': ARTICLE}
+    assert any('Other claims in the article were not checked' in text for text in report.limitations)
+
+
+def test_the_article_never_counts_as_evidence_for_itself():
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_1, context='')],
+                               search_urls=[ARTICLE_URL, ARTICLE_URL + '/#comments', 'https://evidence.example.org/report'])
+    fetch = fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                     'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)})
+    report = run(provider, fetch)
+    assert fetch.fetched.count(ARTICLE_URL) == 1  # Only the initial article fetch.
+    assert report.claims[0].sources_checked == 1
+    assert all(c.url != ARTICLE_URL for c in report.claims[0].evidence)
+
+
+def test_a_redirect_back_to_the_article_is_also_excluded():
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_1, context='')], search_urls=['https://short.example/a'])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE), 'https://short.example/a': (ARTICLE_URL, ARTICLE)}))
+    assert report.claims[0].sources_checked == 0 and report.claims[0].withheld_reason == 'no_sources'
+
+
+def test_paraphrased_claims_are_refused_but_verbatim_ones_proceed():
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_1, context=''),
+                                AtomicClaim(text='The bridge will reopen next year', context='')])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)}))
+    assert report.coverage_status == 'incomplete'
+    refused = report.claims[-1]
+    assert refused.claim == 'The bridge will reopen next year' and refused.withheld_reason == 'coverage_failed'
+    assert report.claims[0].sources_checked == 1
+
+
+def test_invented_context_is_refused():
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_2, context='Officials promised a free ferry.')])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE)}))
+    assert report.claims[0].withheld_reason == 'coverage_failed' and provider.queries == []
+
+
+def test_whitespace_differences_still_count_as_verbatim():
+    provider = ArticleProvider([AtomicClaim(text='Repairs are  expected\nto take eight months', context='')])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)}))
+    assert report.coverage_status == 'passed'
+
+
+def test_opinion_articles_are_not_researched():
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_1, context='')], intent='OPINION')
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE)}))
+    assert report.claims == [] and provider.queries == []
+
+
+def test_unreadable_article_is_a_clear_error_without_model_calls():
+    provider = ArticleProvider([])
+    with pytest.raises(ArticleUnavailable):
+        run(provider, fetcher({}))
+    assert provider.extraction_input is None
+
+
+@pytest.mark.parametrize('url', ['http://news.example.org/story', 'https://127.0.0.1/admin', 'file:///etc/passwd',
+                                 'https://user:pass@news.example.org/'])
+def test_unsafe_article_urls_are_rejected_by_the_real_fetcher(url):
+    with pytest.raises(ValueError):
+        validate_url(url)
+
+
+@pytest.fixture
+def client(monkeypatch, tmp_path):
+    for key in ('OPENAI_API_KEY', 'TAVILY_API_KEY'):
+        monkeypatch.setenv(key, 'offline-test')
+    monkeypatch.setenv('OPENAI_MODEL', 'gpt-4.1-mini')
+    monkeypatch.setenv('ENABLE_LIVE_RESEARCH', 'true')
+    monkeypatch.setattr(main, 'DATA_DIR', tmp_path)
+    class Stub:
+        async def close(self):
+            pass
+    monkeypatch.setattr(main, 'Providers', Stub)
+    with TestClient(main.app) as client:
+        yield client
+
+
+def test_article_route_saves_to_history(client, monkeypatch):
+    from tests.test_history import live_report
+    async def pipeline(url, provider):
+        return live_report(url).model_copy(update={'input_type': 'article', 'source_url': url})
+    monkeypatch.setattr(main, 'run_article_pipeline', pipeline)
+    report = client.post('/fact-check-article', json={'url': ARTICLE_URL}).json()
+    assert report['input_type'] == 'article'
+    assert client.get(f"/history/{report['id']}").json()['source_url'] == ARTICLE_URL
+
+
+def test_article_route_turns_unreadable_links_into_422(client, monkeypatch):
+    async def pipeline(url, provider):
+        raise ArticleUnavailable('That link could not be read as a public article.')
+    monkeypatch.setattr(main, 'run_article_pipeline', pipeline)
+    response = client.post('/fact-check-article', json={'url': ARTICLE_URL})
+    assert response.status_code == 422 and 'could not be read' in response.json()['detail']
+
+
+@pytest.mark.parametrize('payload', [{}, {'url': ''}, {'url': 'x' * 2001}, {'url': ARTICLE_URL, 'claim': 'extra'}])
+def test_article_route_validates_input(client, payload):
+    assert client.post('/fact-check-article', json=payload).status_code == 422

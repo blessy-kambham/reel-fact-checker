@@ -23,6 +23,7 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 from evaluation import snapshot
+from services.budget import Budget
 from services.providers import Providers, ProviderFailure
 
 RESULTS = Path(__file__).with_name('results')
@@ -31,61 +32,6 @@ ALLOWANCES = 'allowances'
 MAX_USD_CEILING = Decimal('1.00')
 MAX_SEARCH_CEILING = 50
 VALIDATION_MODEL = 'gpt-4.1-mini'
-
-class Budget:
-    def __init__(self, ledger=None, search_limit=12, max_usd=Decimal('0.10')):
-        self.ledger = ledger
-        self.reserved = Decimal('0')
-        self.searches = 0
-        self.search_limit = search_limit
-        self.max_usd = Decimal(str(max_usd))
-        self.stopped = False
-        self.metadata = {}
-        if ledger and ledger.exists():
-            state = json.loads(ledger.read_text())
-            self.reserved = Decimal(state['reserved'])
-            self.searches = state['searches']
-            # Limits persisted in a ledger can only be lowered, never raised.
-            self.search_limit = min(search_limit, state.get('search_limit', search_limit))
-            self.max_usd = min(self.max_usd, Decimal(state.get('max_usd', str(self.max_usd))))
-            self.stopped = state.get('stopped', False)
-            self.metadata = state.get('metadata', {})
-
-    def save(self):
-        if self.ledger:
-            self.ledger.parent.mkdir(parents=True, exist_ok=True)
-            temp = self.ledger.with_suffix('.tmp')
-            temp.write_text(json.dumps({'reserved':str(self.reserved),'searches':self.searches,'search_limit':self.search_limit,
-                                        'max_usd':str(self.max_usd),'stopped':self.stopped,'metadata':self.metadata}))
-            temp.replace(self.ledger)
-
-    def ensure_active(self):
-        if self.stopped:
-            raise ProviderFailure('Validation budget stopped; no further external call was made.')
-
-    def stop(self):
-        self.stopped = True
-        self.save()
-
-    def reserve_search(self):
-        self.ensure_active()
-        if self.searches >= self.search_limit:
-            self.stop()
-            raise ProviderFailure('Validation search limit reached; no search was made.')
-        self.searches += 1
-        self.save()
-
-    def reserve(self, instructions, data, schema):
-        self.ensure_active()
-        # Conservative byte bound plus protocol overhead. Failed calls retain their reservation.
-        tokens = len(json.dumps([instructions, data, schema.model_json_schema()], ensure_ascii=True).encode()) + 10000
-        cost = Decimal(tokens) * Decimal('0.0000004') + Decimal(3000) * Decimal('0.0000016')
-        if self.reserved + cost > self.max_usd:
-            self.stop()
-            raise ProviderFailure('Validation budget exhausted; no further model call was made.')
-        self.reserved += cost
-        self.save()
-        return cost
 
 class AuditProvider(Providers):
     def __init__(self, budget, trace):
@@ -111,10 +57,8 @@ class AuditProvider(Providers):
         try:
             result = await super().structured(schema, instructions, data)
             record['output'] = result.model_dump()
-            actual = Decimal(self.usage['input_tokens'] - before['input_tokens']) * Decimal('0.0000004') + Decimal(self.usage['output_tokens'] - before['output_tokens']) * Decimal('0.0000016')
-            if actual > 0:
-                self.budget.reserved += actual - reservation
-                self.budget.save()
+            self.budget.reconcile(reservation, self.usage['input_tokens'] - before['input_tokens'],
+                                  self.usage['output_tokens'] - before['output_tokens'])
             return result
         except ProviderFailure:
             record['error'] = 'model_request_failed'

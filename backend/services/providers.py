@@ -16,11 +16,15 @@ class Providers:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=os.environ['OPENAI_API_KEY'], timeout=40, max_retries=1)
         self.usage = {'input_tokens': 0, 'output_tokens': 0, 'model_calls': 0, 'search_calls': 0}
+        self.spending = None  # Optional services.budget.Budget; the app sets a daily one.
 
     async def close(self):
         await self.client.close()
 
     async def structured(self, schema: type[BaseModel], instructions: str, data: str):
+        spending = getattr(self, 'spending', None)
+        # Raises BudgetExceeded before any request when the limit would be crossed.
+        reservation = spending.reserve(instructions, data, schema) if spending else None
         try:
             response = await self.client.responses.parse(
                 model=os.environ['OPENAI_MODEL'], store=False,
@@ -32,6 +36,8 @@ class Providers:
             if response.usage:
                 self.usage['input_tokens'] += response.usage.input_tokens
                 self.usage['output_tokens'] += response.usage.output_tokens
+                if spending:
+                    spending.reconcile(reservation, response.usage.input_tokens, response.usage.output_tokens)
             if response.output_parsed is None:
                 raise ProviderFailure('The model refused or returned incomplete structured output.')
             return response.output_parsed
@@ -41,6 +47,9 @@ class Providers:
             raise ProviderFailure('Model request failed. Check configuration, account access, and provider availability.') from exc
 
     async def search(self, query: str) -> list[dict]:
+        spending = getattr(self, 'spending', None)
+        if spending:
+            spending.reserve_search()
         self.usage['search_calls'] += 1
         try:
             async with httpx.AsyncClient(timeout=20, trust_env=False) as client:

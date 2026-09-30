@@ -8,6 +8,7 @@ from evaluation import live, snapshot
 from evaluation.live import AuditProvider, Budget, open_allowance
 from evaluation.summarize import summarize
 from services.pipeline import research_claim
+from services.budget import BudgetExceeded
 from services.providers import Providers, ProviderFailure
 from tests.test_pipeline import CLAIM, FakeProvider, fake_fetch
 
@@ -139,10 +140,17 @@ def test_relation_and_verdict_calls_are_reserved_and_traced(monkeypatch, tmp_pat
     assert Decimal(persisted['reserved']) == budget.reserved > 0 and persisted['searches'] == 2
 
 
-def test_budget_stop_before_verdict_withholds_and_persists(monkeypatch, tmp_path):
+def audit_report(monkeypatch, budget):
+    from services.pipeline import run_pipeline
+    monkeypatch.setenv('OPENAI_API_KEY', 'offline-test')
+    trace = {'model': [], 'searches': []}
+    report = asyncio.run(run_pipeline(CLAIM.text, AuditProvider(budget, trace), fake_fetch))
+    return report.claims[0], trace
+
+
+def test_budget_stop_before_verdict_is_a_named_withheld_verdict_and_persists(monkeypatch, tmp_path):
     Offline(monkeypatch)
     # Reservations are deterministic offline; allow everything except the final verdict call.
-    probe = Budget()
     costs = []
     original = Budget.reserve
     def recording(self, instructions, data, schema):
@@ -150,46 +158,41 @@ def test_budget_stop_before_verdict_withholds_and_persists(monkeypatch, tmp_path
         costs.append((schema.__name__, cost))
         return cost
     monkeypatch.setattr(Budget, 'reserve', recording)
-    audit_run(monkeypatch, probe)
+    audit_report(monkeypatch, Budget())
     monkeypatch.setattr(Budget, 'reserve', original)
-    before_verdict = sum(cost for stage, cost in costs if stage != 'VerdictDecision')
+    assert [stage for stage, _ in costs][-1] == 'VerdictDecision'
+    limit = sum(cost for stage, cost in costs if stage != 'VerdictDecision') + Decimal('0.0000001')
     ledger = tmp_path / 'ledger.json'
-    budget = Budget(ledger, search_limit=4, max_usd=before_verdict + Decimal('0.0000001'))
     offline = Offline(monkeypatch)
-    result, trace = audit_run(monkeypatch, budget)
-    assert result.withheld_reason == 'verdict_check_unavailable' and result.verdict == 'UNVERIFIABLE'
+    claim, trace = audit_report(monkeypatch, Budget(ledger, search_limit=4, max_usd=limit))
+    assert claim.withheld_reason == 'spending_limit' and claim.verdict == 'UNVERIFIABLE'
     assert trace['blocked'] == [{'stage': 'VerdictDecision', 'reason': 'budget_stopped'}]
-    assert 'VerdictDecision' not in offline.calls and result.evidence
+    assert 'VerdictDecision' not in offline.calls
     assert Budget(ledger).stopped
 
-    # Restart: the persisted stop blocks every external call, including cheaper ones.
+    # Restart: the persisted stop refuses the first call of a new report, and the limit never rises.
     offline = Offline(monkeypatch)
-    restarted, trace = audit_run(monkeypatch, Budget(ledger, search_limit=4, max_usd='0.10'))
-    assert offline.calls == [] and restarted.withheld_reason == 'search_failed'
-    assert Budget(ledger).max_usd == before_verdict + Decimal('0.0000001')
+    with pytest.raises(BudgetExceeded):
+        audit_report(monkeypatch, Budget(ledger, search_limit=4, max_usd='0.10'))
+    assert offline.calls == []
+    assert Budget(ledger).max_usd == limit
 
 
-def test_search_cap_stop_blocks_every_later_model_call(monkeypatch):
+def test_search_cap_stops_the_claim_before_any_model_call(monkeypatch):
     offline = Offline(monkeypatch)
     monkeypatch.setenv('OPENAI_API_KEY', 'offline-test')
     trace = {'model': [], 'searches': []}
     budget = Budget(search_limit=1)
-    # One search succeeds; the capped second search stops the allowance, so analysis is refused.
-    with pytest.raises(ProviderFailure, match='budget stopped'):
+    with pytest.raises(BudgetExceeded, match='Search limit'):
         asyncio.run(research_claim(CLAIM, AuditProvider(budget, trace), fake_fetch))
     assert offline.calls == ['search'] and budget.stopped
-    assert trace['blocked'] == [{'stage': 'search', 'reason': 'budget_stopped'},
-                                {'stage': 'Analysis', 'reason': 'budget_stopped'}]
+    assert trace['blocked'] == [{'stage': 'search', 'reason': 'budget_stopped'}]
 
 
-def test_budget_stop_inside_a_report_is_a_named_withheld_verdict(monkeypatch):
-    from services.pipeline import run_pipeline
+def test_budget_stop_inside_a_report_is_named(monkeypatch):
     Offline(monkeypatch)
-    monkeypatch.setenv('OPENAI_API_KEY', 'offline-test')
-    trace = {'model': [], 'searches': []}
-    report = asyncio.run(run_pipeline(CLAIM.text, AuditProvider(Budget(search_limit=1), trace), fake_fetch))
-    claim = report.claims[0]
-    assert claim.verdict == 'UNVERIFIABLE' and claim.withheld_reason == 'provider_failure'
+    claim, _ = audit_report(monkeypatch, Budget(search_limit=1))
+    assert claim.verdict == 'UNVERIFIABLE' and claim.withheld_reason == 'spending_limit'
 
 
 def test_validation_client_never_retries(monkeypatch):

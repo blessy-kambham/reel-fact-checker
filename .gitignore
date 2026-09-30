@@ -27,3 +27,10 @@ coverage/
 
 # Generated offline evaluation reports
 /backend/evaluation/results/
+
+# Local spending ledgers and history database
+/backend/data/
+
+# Browser test output
+/frontend/test-results/
+/frontend/playwright-report/

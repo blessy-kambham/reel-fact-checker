@@ -7,7 +7,8 @@ Verdict = Literal['TRUE', 'FALSE', 'PARTIALLY TRUE', 'MISLEADING', 'UNVERIFIABLE
 # Why the application replaced a verdict with UNVERIFIABLE. None means the verdict stage's answer was issued.
 WithheldReason = Literal['coverage_failed', 'no_sources', 'search_failed', 'citation_failed', 'no_relevant_evidence',
                          'verdict_check_unavailable', 'unknown_evidence_ids', 'missing_evidence_ids',
-                         'evidence_stance_mismatch', 'conflicting_evidence', 'claim_timeout', 'provider_failure']
+                         'evidence_stance_mismatch', 'conflicting_evidence', 'claim_timeout', 'provider_failure',
+                         'spending_limit']
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -122,3 +123,9 @@ class Report(StrictModel):
     omitted_claims: bool = False
     input_spans: list[InputSpan] = Field(default_factory=list)
     coverage_status: Literal["not_checked", "passed", "incomplete", "unavailable"] = "not_checked"
+    input_type: Literal['text', 'article'] = 'text'
+    source_url: str | None = None
+    source_sha256: str | None = Field(default=None, description='Hash of the fetched article text the claims were copied from.')
+
+class ArticleRequest(StrictModel):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]

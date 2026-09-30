@@ -45,7 +45,9 @@ export default function Report({ report }) {
   return <section ref={reportElement} className="report" aria-label="Fact-check report">
     <div className="card-heading"><p className="eyebrow">{report.mode === 'demo' ? 'FICTIONAL DEMO REPORT' : 'RESEARCH REPORT'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button></div></div>
     <h2>{report.mode === 'demo' ? 'See how evidence changes the story.' : 'Your claim-by-claim report'}</h2>
-    {['incomplete', 'unavailable'].includes(report.coverage_status) && <p className="notice" role="alert">Extraction coverage {report.coverage_status}. No research was started and no verdict was established. Submit each assertion separately.</p>}
+    {report.input_type === 'article' && <p className="report-meta">Article: {report.source_url?.startsWith('https://') ? <a href={report.source_url} target="_blank" rel="noopener noreferrer">{report.source_url}</a> : report.source_url}</p>}
+    {report.input_type === 'article' && report.coverage_status === 'incomplete' && <p className="notice" role="alert">Some selected claims were not copied word for word from the article, so they were not researched.</p>}
+    {report.input_type !== 'article' && ['incomplete', 'unavailable'].includes(report.coverage_status) && <p className="notice" role="alert">Extraction coverage {report.coverage_status}. No research was started and no verdict was established. Submit each assertion separately.</p>}
     {report.omitted_claims && !report.coverage_status && <p className="notice" role="alert">Incomplete coverage: some assertions were omitted. Verdicts are withheld. Submit each assertion separately.</p>}
     <p className="report-meta">Report ID: {report.id}</p><p className="notice">{report.note}</p>
     <p className="report-meta">{new Date(report.created_at).toLocaleString()} · {report.claims.length} claims · {report.usage.search_calls} searches · {report.usage.model_calls} model calls</p>
@@ -91,6 +93,6 @@ export default function Report({ report }) {
       </details>}
       <details><summary>Research coverage & limitations</summary><p><strong>Supporting search:</strong> {claim.supporting_search}</p><p><strong>Contradicting search:</strong> {claim.contradicting_search}</p><ul>{claim.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
     </article>)}
-    <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul><p className="screen-only">Reports remain in this tab until you clear or reload it. Download JSON or choose Print / Save PDF to keep a copy.</p></aside>
+    <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul><p className="screen-only">Live reports are also saved on this computer under Saved reports. Download JSON or choose Print / Save PDF to keep your own copy.</p></aside>
   </section>;
 }

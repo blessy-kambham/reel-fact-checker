@@ -3,12 +3,14 @@ import asyncio
 import json
 import hashlib
 from datetime import datetime, timezone
+from urllib.parse import urldefrag
 from uuid import uuid4
 
 from schemas import VerdictDecision, EvidenceRelation, ExtractionCoverage, Extraction, Analysis, CitationJudgment, Citation, ClaimResult, Report, Source, EvidenceDraft
 from services.fetcher import fetch_text
 from services.excerpts import source_excerpts
 from services.input_mapping import map_input
+from services.budget import BudgetExceeded
 from services.providers import ProviderFailure
 
 
@@ -34,10 +36,16 @@ WITHHELD_MESSAGES = {
     'conflicting_evidence': 'Verified evidence supports and contradicts the claim. An unqualified verdict was withheld pending review.',
     'claim_timeout': 'This claim exceeded its research time limit, so the verdict was withheld.',
     'provider_failure': 'A research provider failed, so the verdict was withheld.',
+    'spending_limit': 'The spending limit was reached before this claim finished, so the verdict was withheld.',
 }
 SINGLE_SOURCE_NOTE = 'This verdict rests on a single web page. Check that source before relying on it.'
 # Reasons that reflect a legitimate research outcome rather than a failed or rejected check.
 COMPLETE_WITHHELD_REASONS = {'no_relevant_evidence', 'conflicting_evidence'}
+
+
+def page_key(url: str) -> str:
+    """Compare pages without fragments or a trailing slash."""
+    return urldefrag(url or '')[0].rstrip('/').casefold()
 
 
 def unresolved(claim: str, reason: str, code: str) -> ClaimResult:
@@ -93,6 +101,8 @@ async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
             verified = judgment.supports_attribution and judgment.stance_matches
             code = 'verified' if verified else 'attribution_rejected'
             reason = judgment.reason
+        except BudgetExceeded:
+            raise
         except (ProviderFailure, asyncio.TimeoutError):
             # Keep prior verified evidence; do not copy provider exception bodies into reports.
             code = 'check_unavailable'
@@ -135,6 +145,8 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
         stance = {'SUPPORTS':'FOR', 'CONTRADICTS':'AGAINST', 'BACKGROUND':'CONTEXT'}.get(relation.relation)
         code = 'relation_unresolved'
         reason = 'Evidence relationship was irrelevant or uncertain; citation excluded.'
+    except BudgetExceeded:
+        raise
     except (ProviderFailure, asyncio.TimeoutError):
         stance = None
         code = 'check_unavailable'
@@ -152,7 +164,8 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
 
 
 
-async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
+async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset()) -> ClaimResult:
+    """`exclude` holds page keys that may not serve as evidence (for example the article being checked)."""
     warnings = []
     sources = {}
     urls = set()
@@ -163,12 +176,12 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
             search_status[direction] = 'Search completed; no usable pages retrieved in this direction.'
             for hit in hits:
                 url = hit.get('url', '')
-                if url in urls:
+                if url in urls or page_key(url) in exclude:
                     continue
                 urls.add(url)
                 try:
                     final_url, text = await fetch(url)
-                    if any(s.url == final_url for s in sources.values()):
+                    if any(s.url == final_url for s in sources.values()) or page_key(final_url) in exclude:
                         continue
                     source_id = f'S{len(sources) + 1}'
                     sources[source_id] = Source(id=source_id, title=str(hit.get('title', 'Source'))[:250],
@@ -176,6 +189,8 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
                     search_status[direction] = 'Search completed and pages retrieved; see evidence below.'
                 except Exception:
                     warnings.append('A search result could not be retrieved safely as readable text; it was excluded.')
+        except BudgetExceeded:
+            raise
         except ProviderFailure as exc:
             search_status[direction] = 'Failed'
             warnings.append(str(exc))
@@ -236,6 +251,8 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
                 'the supplied evidence resolves the conflict. Return the evidence IDs supporting the decision. '
                 'Do not use outside knowledge; source repetition is not independent confirmation.',
                 json.dumps({'target_assertion': claim.text, 'verified_evidence': evidence}))
+        except BudgetExceeded:
+            raise
         except (ProviderFailure, asyncio.TimeoutError):
             withheld = 'verdict_check_unavailable'
         else:
@@ -316,6 +333,8 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
             if not coverage.complete or coverage.issues:
                 coverage_status = 'incomplete'
                 coverage_issues = coverage.issues
+        except BudgetExceeded:
+            raise
         except (ProviderFailure, asyncio.TimeoutError):
             coverage_status = 'unavailable'
     if coverage_status != 'passed':
@@ -326,16 +345,23 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
                       intent=extraction.intent, note=reason, claims=[unresolved(text, reason, 'coverage_failed')],
                       limitations=[reason] + coverage_issues, usage=provider.usage,
                       omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
+    results = await research_all(extraction.claims, provider, fetch) if extraction.intent == 'FACTUAL' else []
+    limitations = ['At most three claims and six search results per claim are processed in this local MVP.']
+    return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
+                  note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
+
+
+async def research_all(claims, provider, fetch=fetch_text, exclude=frozenset()):
+    """Research claims at most two at a time; every failure becomes a named withheld verdict."""
     limiter = asyncio.Semaphore(2)
     async def branch(claim):
         async with limiter:
             try:
-                return await asyncio.wait_for(research_claim(claim, provider, fetch), timeout=150)
+                return await asyncio.wait_for(research_claim(claim, provider, fetch, exclude), timeout=150)
             except asyncio.TimeoutError:
                 return unresolved(claim.text, 'This claim exceeded its research time limit.', 'claim_timeout')
+            except BudgetExceeded as exc:
+                return unresolved(claim.text, str(exc), 'spending_limit')
             except ProviderFailure as exc:
                 return unresolved(claim.text, str(exc), 'provider_failure')
-    results = await asyncio.gather(*(branch(c) for c in extraction.claims)) if extraction.intent == 'FACTUAL' else []
-    limitations = ['At most three claims and six search results per claim are processed in this local MVP.']
-    return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
-                  note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
+    return list(await asyncio.gather(*(branch(c) for c in claims)))

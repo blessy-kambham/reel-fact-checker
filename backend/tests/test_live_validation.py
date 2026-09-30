@@ -28,9 +28,11 @@ def test_budget_never_exceeds_allowance():
 
 
 @pytest.fixture
-def enabled_client(monkeypatch):
-    for key in ('OPENAI_API_KEY', 'TAVILY_API_KEY', 'OPENAI_MODEL'):
+def enabled_client(monkeypatch, tmp_path):
+    for key in ('OPENAI_API_KEY', 'TAVILY_API_KEY'):
         monkeypatch.setenv(key, 'offline-test')
+    monkeypatch.setenv('OPENAI_MODEL', 'gpt-4.1-mini')
+    monkeypatch.setattr(main, 'DATA_DIR', tmp_path)
     monkeypatch.setenv('ENABLE_LIVE_RESEARCH', 'true')
     class Stub:
         closed = False
