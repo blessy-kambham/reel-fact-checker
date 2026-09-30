@@ -15,6 +15,8 @@ PRICES = {'gpt-4.1-mini': (Decimal('0.0000004'), Decimal('0.0000016'))}
 MAX_OUTPUT_TOKENS = 3000
 BYTES_PER_TOKEN = 3
 OVERHEAD_TOKENS = 2000
+# Conservative per-image allowance for low-detail image input; reconciled to actual usage after the call.
+IMAGE_TOKENS = 3000
 
 
 class BudgetExceeded(ProviderFailure):
@@ -65,12 +67,12 @@ class Budget:
         self.searches += 1
         self.save()
 
-    def reserve(self, instructions, data, schema):
+    def reserve(self, instructions, data, schema, extra_input_tokens=0):
         self.ensure_active()
         # About one token per three bytes of ASCII-escaped JSON (English averages about four), plus
         # protocol overhead. Conservative, not exact. Failed calls retain their reservation.
         size = len(json.dumps([instructions, data, schema.model_json_schema()], ensure_ascii=True).encode())
-        tokens = -(-size // BYTES_PER_TOKEN) + OVERHEAD_TOKENS
+        tokens = -(-size // BYTES_PER_TOKEN) + OVERHEAD_TOKENS + extra_input_tokens
         cost = Decimal(tokens) * self.input_price + Decimal(MAX_OUTPUT_TOKENS) * self.output_price
         if self.reserved + cost > self.max_usd:
             self.stop()

@@ -3,6 +3,7 @@ export const API = 'http://127.0.0.1:8000';
 
 export const liveConfig = {
   live_ready: true, live_enabled: true, missing_settings: [], max_claims: 3, message: 'Live research is ready.',
+  video_ready: true, video_message: 'Video checks are available.',
   spending: { spent_usd: 0.031, limit_usd: 0.5, searches: 4, search_limit: 40, stopped: false },
 };
 export const offlineConfig = { ...liveConfig, live_ready: false, live_enabled: false, spending: null,
@@ -34,7 +35,7 @@ export function report(overrides = {}, claimOverrides = {}) {
   };
 }
 
-export async function mockBackend(page, { config = liveConfig, factCheck, article, history = [], saved = {} } = {}) {
+export async function mockBackend(page, { config = liveConfig, factCheck, article, video, history = [], saved = {} } = {}) {
   const calls = [];
   await page.route(`${API}/**`, async route => {
     const request = route.request();
@@ -45,6 +46,7 @@ export async function mockBackend(page, { config = liveConfig, factCheck, articl
     if (path === '/demo') return json(200, report({ mode: 'demo', id: '22222222-2222-4222-8222-222222222222' }));
     if (path === '/fact-check') return factCheck ? factCheck(route, json) : json(200, report());
     if (path === '/fact-check-article') return article ? article(route, json) : json(200, report());
+    if (path === '/fact-check-video') return video ? video(route, json) : json(200, report());
     if (path === '/history') return json(200, { reports: history });
     const match = path.match(/^\/history\/(.+)$/);
     if (match && request.method() === 'DELETE') return json(200, { deleted: match[1] });

@@ -340,3 +340,17 @@ The 2026-09-30 compound retest issued TRUE and FALSE correctly, but under the sa
 ### Live checkpoint 1 and follow-up fixes
 
 Checkpoint 1 (four requests, $0.108) returned correct FALSE verdicts for the far-side sunlight assertion and for Pluto, and confirmed off-topic citations no longer appear. It also showed that one invented excerpt ID could withhold a supported verdict, that general facts could be labelled as contradictions, that article claims failed the verbatim check over apostrophes, and that budget reservations were about four times too high. All four are fixed offline; details are in `docs/TEXT_VALIDATION.md`. 229 backend tests, 13 policy cases, 10 browser tests and the frontend build pass.
+
+### Video mode
+
+`POST /fact-check-video` (multipart: `file`, optional `caption`) checks a short video with existing tools, no custom models, as in the original design:
+
+1. **Validate** with ffprobe: MP4, MOV or WebM with a video track, at most 3 minutes and 100 MB. Oversized uploads are refused before the body is read; ffmpeg only reads local files.
+2. **Extract** 16 kHz mono audio and four evenly spaced keyframes with ffmpeg, in a temporary folder that is always deleted.
+3. **Transcribe** speech locally with Whisper (faster-whisper). Free, and audio never leaves the machine.
+4. **Read on-screen text** from the keyframes with the configured OpenAI model's image input (low detail), reserved against the daily spending cap.
+5. **Normalize** transcript, on-screen text and optional caption into one text, then select up to three central claims copied word for word and research them exactly like articles.
+
+Reports include what the video says (transcript, on-screen text, caption) and a media summary so recognition mistakes are visible. Setup for video only: install ffmpeg (macOS: `brew install ffmpeg`) and `pip install -r requirements-video.txt`; the Whisper model (`WHISPER_MODEL`, default `small`, about 0.5 GB) downloads on first use. Without them, `/config` explains what is missing and the page disables video.
+
+Tested offline with real ffmpeg on generated clips, fake transcription and a fake model: 251 backend tests, 13 policy cases, 12 browser tests and the frontend build pass. Not yet run against real videos or live providers (live checkpoint 2).

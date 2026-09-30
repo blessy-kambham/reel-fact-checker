@@ -2,11 +2,13 @@
 import asyncio
 import os
 import sqlite3
+import tempfile
 from uuid import UUID
 from pathlib import Path
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from schemas import ArticleRequest, ClaimRequest, Report
 from decimal import Decimal, InvalidOperation
@@ -14,6 +16,10 @@ from services.budget import PRICES, BudgetExceeded, daily_budget
 from services.article import ArticleUnavailable, run_article_pipeline
 from services.demo import demo_report
 from services.history import History
+from services import media
+from services.media import MediaRejected, MediaToolMissing
+from services.transcribe import LocalWhisper, TranscriptionUnavailable
+from services.video import MAX_CAPTION_CHARS, run_video_pipeline
 from services.pipeline import run_pipeline
 from services.providers import Providers, ProviderFailure, missing_settings
 
@@ -30,6 +36,25 @@ def spending_limits():
     except (InvalidOperation, ValueError):
         return None
     return (usd, searches) if usd > 0 and searches >= 0 else None
+
+
+VIDEO_SUFFIXES = {'.mp4', '.mov', '.m4v', '.webm'}
+_transcriber = None
+
+
+def transcriber():
+    global _transcriber
+    if _transcriber is None:
+        _transcriber = LocalWhisper()
+    return _transcriber
+
+
+def video_status():
+    if not media.tools_available():
+        return False, 'Video checks need ffmpeg. On a Mac: brew install ffmpeg, then restart the backend.'
+    if not LocalWhisper.installed():
+        return False, 'Video checks need local transcription. Run: pip install -r requirements-video.txt, then restart the backend.'
+    return True, 'Video checks are available.'
 
 
 def history():
@@ -69,8 +94,9 @@ def config():
         spending = todays_budget().status()  # Numbers only; never configuration values or keys.
         if spending['stopped']:
             message = "Today's spending limit has been reached. Live research resumes after midnight UTC."
+    video_ready, video_message = video_status()
     return {'live_ready': ready, 'live_enabled': enabled, 'missing_settings': missing, 'max_claims': 3,
-            'spending': spending, 'message': message}
+            'spending': spending, 'message': message, 'video_ready': ready and video_ready, 'video_message': video_message}
 
 @app.get('/demo', response_model=Report)
 def demo():
@@ -86,7 +112,40 @@ async def fact_check_article(request: ArticleRequest):
     return await run_live(lambda provider: run_article_pipeline(request.url, provider))
 
 
-async def run_live(make_report):
+@app.middleware('http')
+async def limit_video_uploads(request: Request, call_next):
+    # Refuse oversized or unsized uploads before any of the body is read.
+    if request.url.path == '/fact-check-video' and request.method == 'POST':
+        length = request.headers.get('content-length')
+        if not length or not length.isdigit():
+            return JSONResponse(status_code=411, content={'detail': 'Uploads must declare their size.'})
+        if int(length) > media.MAX_VIDEO_BYTES + 1024 * 1024:
+            return JSONResponse(status_code=413, content={'detail': f'Videos must be at most {media.MAX_VIDEO_BYTES // (1024 * 1024)} MB.'})
+    return await call_next(request)
+
+
+@app.post('/fact-check-video', response_model=Report)
+async def fact_check_video(file: UploadFile = File(...), caption: str = Form('', max_length=MAX_CAPTION_CHARS)):
+    name = Path(file.filename or 'video').name[:120]
+    if Path(name).suffix.lower() not in VIDEO_SUFFIXES:
+        raise HTTPException(422, 'Upload an MP4, MOV or WebM video.')
+    ready, message = video_status()
+    if not ready:
+        raise HTTPException(503, message)
+    with tempfile.TemporaryDirectory(prefix='reel-upload-') as work:
+        path = Path(work) / ('upload' + Path(name).suffix.lower())
+        size = 0
+        with path.open('wb') as target:
+            while chunk := await file.read(1 << 20):
+                size += len(chunk)
+                if size > media.MAX_VIDEO_BYTES:
+                    raise HTTPException(413, f'Videos must be at most {media.MAX_VIDEO_BYTES // (1024 * 1024)} MB.')
+                target.write(chunk)
+        # The upload is deleted when this block ends, whatever happens.
+        return await run_live(lambda provider: run_video_pipeline(path, name, caption, provider, transcriber()), timeout=600)
+
+
+async def run_live(make_report, timeout=330):
     """Shared guards for every live report: configuration, daily spending, one run at a time, timeout, history."""
     status = config()
     if not status['live_ready']:
@@ -100,11 +159,13 @@ async def run_live(make_report):
         provider = Providers()
         provider.spending = todays_budget()
         try:
-            report = await asyncio.wait_for(make_report(provider), timeout=330)
+            report = await asyncio.wait_for(make_report(provider), timeout=timeout)
         except asyncio.TimeoutError:
             raise HTTPException(504, 'The report timed out. Try a shorter, more specific claim.')
-        except ArticleUnavailable as exc:
+        except (ArticleUnavailable, MediaRejected) as exc:
             raise HTTPException(422, str(exc))
+        except (TranscriptionUnavailable, MediaToolMissing) as exc:
+            raise HTTPException(503, str(exc))
         except BudgetExceeded:
             raise HTTPException(429, "Today's spending limit was reached before the report could start. Live research resumes after midnight UTC.")
         except ProviderFailure as exc:

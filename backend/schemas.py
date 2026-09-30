@@ -123,9 +123,26 @@ class Report(StrictModel):
     omitted_claims: bool = False
     input_spans: list[InputSpan] = Field(default_factory=list)
     coverage_status: Literal["not_checked", "passed", "incomplete", "unavailable"] = "not_checked"
-    input_type: Literal['text', 'article'] = 'text'
+    input_type: Literal['text', 'article', 'video'] = 'text'
     source_url: str | None = None
-    source_sha256: str | None = Field(default=None, description='Hash of the fetched article text the claims were copied from.')
+    source_sha256: str | None = Field(default=None, description='Hash of the fetched article text or uploaded video the claims came from.')
+    source_text: str | None = Field(default=None, description='For videos: the transcript, on-screen text and caption the claims were copied from.')
+    media: 'MediaSummary | None' = None
+
+class MediaSummary(StrictModel):
+    duration_seconds: float
+    had_audio: bool
+    transcript_language: str | None = None
+    frames_read: int
+    transcript_chars: int
+    screen_text_chars: int
+    caption_chars: int
+
+class ScreenText(StrictModel):
+    text: str = Field(max_length=4000, description='All text visible in the frames, copied exactly in reading order, '
+                      'with each distinct caption or overlay once. Empty when no text is visible.')
 
 class ArticleRequest(StrictModel):
     url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+Report.model_rebuild()

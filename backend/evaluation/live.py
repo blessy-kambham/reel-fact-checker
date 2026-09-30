@@ -33,7 +33,7 @@ MAX_USD_CEILING = Decimal('1.00')
 MAX_SEARCH_CEILING = 50
 VALIDATION_MODEL = 'gpt-4.1-mini'
 # Every route that runs paid research must be traced; a test checks this against the app's routes.
-LIVE_PATHS = frozenset({'/fact-check', '/fact-check-article'})
+LIVE_PATHS = frozenset({'/fact-check', '/fact-check-article', '/fact-check-video'})
 
 class AuditProvider(Providers):
     def __init__(self, budget, trace):
@@ -65,6 +65,27 @@ class AuditProvider(Providers):
         except ProviderFailure:
             record['error'] = 'model_request_failed'
             raise
+
+    async def read_images(self, schema, instructions, images):
+        from services.budget import IMAGE_TOKENS
+        async with self.model_lock:
+            try:
+                reservation = self.budget.reserve(instructions, '', schema, extra_input_tokens=IMAGE_TOKENS * len(images))
+            except ProviderFailure:
+                self.trace.setdefault('blocked', []).append({'stage': schema.__name__, 'reason': 'budget_stopped'})
+                raise
+            before = dict(self.usage)
+            record = {'stage': schema.__name__, 'input': {'images': len(images)}}
+            self.trace['model'].append(record)
+            try:
+                result = await super().read_images(schema, instructions, images)
+                record['output'] = result.model_dump()
+                self.budget.reconcile(reservation, self.usage['input_tokens'] - before['input_tokens'],
+                                      self.usage['output_tokens'] - before['output_tokens'])
+                return result
+            except ProviderFailure:
+                record['error'] = 'model_request_failed'
+                raise
 
     async def search(self, query):
         try:
@@ -162,12 +183,15 @@ def create_app(allowance, max_usd, max_searches):
         if active['trace'] is not None:
             from fastapi.responses import JSONResponse
             return JSONResponse(status_code=429, content={'detail': 'Validation request already running.'})
-        try:
-            payload = await request.json()
-        except (ValueError, UnicodeDecodeError):
-            return await call_next(request)
-        if not isinstance(payload, dict):
-            return await call_next(request)
+        if request.url.path == '/fact-check-video':
+            payload = {'claim': 'video upload'}  # Multipart body: never parsed or stored by the trace.
+        else:
+            try:
+                payload = await request.json()
+            except (ValueError, UnicodeDecodeError):
+                return await call_next(request)
+            if not isinstance(payload, dict):
+                return await call_next(request)
         trace = {'submitted_text': payload.get('claim') or payload.get('url'), 'route': request.url.path, 'allowance': allowance, 'code_fingerprint': code['fingerprint'],
                  'git_head': code['git_head'], 'snapshot_dir': code['snapshot_dir'],
                  'model': [], 'searches': [], 'confidence': None,

@@ -1,0 +1,3 @@
+# Optional: local speech-to-text for video mode. Also needs ffmpeg (macOS: brew install ffmpeg).
+# The Whisper model (WHISPER_MODEL, default "small", about 0.5 GB) downloads on first use.
+faster-whisper==1.1.1

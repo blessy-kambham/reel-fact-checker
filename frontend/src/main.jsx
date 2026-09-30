@@ -10,6 +10,8 @@ function App() {
   const [claim, setClaim] = useState('');
   const [inputType, setInputType] = useState('text');
   const [articleUrl, setArticleUrl] = useState('');
+  const [videoFile, setVideoFile] = useState(null);
+  const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
@@ -42,13 +44,17 @@ function App() {
     setLoading(true); setReport(null); setError('');
     try {
       const article = !demo && inputType === 'article';
-      const response = await fetch(`${apiBase}/${demo ? 'demo' : article ? 'fact-check-article' : 'fact-check'}`, {
+      const video = !demo && inputType === 'video';
+      let body;
+      if (video) { body = new FormData(); body.append('file', videoFile); body.append('caption', caption.trim()); }
+      const response = await fetch(`${apiBase}/${demo ? 'demo' : video ? 'fact-check-video' : article ? 'fact-check-article' : 'fact-check'}`, {
         method: demo ? 'GET' : 'POST',
-        ...(!demo && {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(article ? {url: articleUrl.trim()} : {claim: claim.trim()})}),
-        signal: AbortSignal.timeout(demo ? 10000 : 345000),
+        ...(video && { body }),
+        ...(!demo && !video && {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(article ? {url: articleUrl.trim()} : {claim: claim.trim()})}),
+        signal: AbortSignal.timeout(demo ? 10000 : video ? 615000 : 345000),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : article ? 'Please enter a public https:// article link.' : 'Please enter a claim between 1 and 5,000 characters.');
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : video ? 'Please choose an MP4, MOV or WebM video and a caption under 2,200 characters.' : article ? 'Please enter a public https:// article link.' : 'Please enter a claim between 1 and 5,000 characters.');
       if (!Array.isArray(data.claims) || !['live', 'demo'].includes(data.mode)) throw new Error('Unexpected backend response. Restart the backend and retry.');
       setReport(data);
     } catch (err) {
@@ -64,18 +70,26 @@ function App() {
       <div className="input-switch" role="group" aria-label="Input type">
         <button type="button" className="small-button" aria-pressed={inputType === 'text'} disabled={loading} onClick={() => setInputType('text')}>Statement</button>
         <button type="button" className="small-button" aria-pressed={inputType === 'article'} disabled={loading} onClick={() => setInputType('article')}>Article link</button>
+        <button type="button" className="small-button" aria-pressed={inputType === 'video'} disabled={loading} onClick={() => setInputType('video')}>Video</button>
       </div>
       <form onSubmit={event => { event.preventDefault(); run(); }}>
         {inputType === 'text' ? <>
           <label htmlFor="claim">Your statement</label>
           <textarea id="claim" value={claim} maxLength={5000} required disabled={loading} rows={4} placeholder="Paste a factual statement you want to investigate…" aria-describedby="claim-help" onChange={event => setClaim(event.target.value)} />
           <div className="input-meta" id="claim-help"><span>Text input · Up to 3 claims per report</span><span>{claim.length.toLocaleString()} / 5,000</span></div>
+        </> : inputType === 'video' ? <>
+          <label htmlFor="video-file">Video file</label>
+          <input id="video-file" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" required disabled={loading} aria-describedby="video-help" onChange={event => setVideoFile(event.target.files?.[0] || null)} />
+          <label htmlFor="video-caption">Caption (optional)</label>
+          <textarea id="video-caption" value={caption} maxLength={2200} disabled={loading} rows={2} placeholder="Paste the post's caption if it makes claims…" onChange={event => setCaption(event.target.value)} />
+          <div className="input-meta" id="video-help"><span>MP4, MOV or WebM · up to 3 minutes and 100 MB · processed on this computer</span><span>{caption.length.toLocaleString()} / 2,200</span></div>
+          {config && !config.video_ready && <p className="notice" role="note">{config.video_message}</p>}
         </> : <>
           <label htmlFor="article-url">Article link</label>
           <input id="article-url" type="url" value={articleUrl} maxLength={2000} required disabled={loading} placeholder="https://…" aria-describedby="article-help" onChange={event => setArticleUrl(event.target.value)} />
           <div className="input-meta" id="article-help"><span>Public https:// news or blog page · Up to 3 central claims are checked</span></div>
         </>}
-        <button disabled={loading || !(inputType === 'text' ? claim.trim() : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'} <span aria-hidden="true">↗</span></button>
+        <button disabled={loading || !(inputType === 'text' ? claim.trim() : inputType === 'video' ? videoFile && config?.video_ready : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'} <span aria-hidden="true">↗</span></button>
       </form>
       {config?.live_ready && <p className="notice">Research sends text to OpenAI and queries to Tavily and may incur provider charges. Reports are experimental; inspect the evidence before relying on a verdict.</p>}
       {config?.live_ready && config?.spending && <p className="report-meta">Today (UTC): about ${config.spending.spent_usd.toFixed(3)} of ${config.spending.limit_usd.toFixed(2)} estimated OpenAI cost · {config.spending.searches} of {config.spending.search_limit} searches{config.spending.stopped ? ' · daily limit reached' : ''}</p>}
@@ -85,7 +99,7 @@ function App() {
       {config && <History apiBase={apiBase} disabled={loading} onOpen={data => { setError(''); setReport(data); }} />}
     </section>
     <div aria-live="polite">{report && <Report report={report} />}</div>
-    <footer><span>Evidence first. Uncertainty made clear.</span><span>Text and article links today. Video comes later.</span></footer>
+    <footer><span>Evidence first. Uncertainty made clear.</span><span>Statements, article links and videos.</span></footer>
   </main>;
 }
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);

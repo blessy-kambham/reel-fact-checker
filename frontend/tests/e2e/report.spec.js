@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mockBackend, offlineConfig, report } from './fixtures.js';
+import { liveConfig, mockBackend, offlineConfig, report } from './fixtures.js';
 
 test('free demo works without live research and downloads JSON', async ({ page }) => {
   await mockBackend(page, { config: offlineConfig });
@@ -118,4 +118,34 @@ test('printing opens every collapsed section and restores it afterwards', async 
   await expect(page.locator('body')).toHaveClass(/printing-report/);
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   await expect(page.locator('.report details[open]')).toHaveCount(0);
+});
+
+test('video upload goes to the video route and shows what the video says', async ({ page }) => {
+  const calls = await mockBackend(page, { video: (route, json) => json(200, report({
+    input_type: 'video', submitted_text: 'Video: reel.mp4', coverage_status: 'passed',
+    source_text: 'What is said:\nThe fictional lake never freezes.\n\nText on screen:\nNEVER FREEZES',
+    media: { duration_seconds: 42, had_audio: true, transcript_language: 'en', frames_read: 4,
+             transcript_chars: 33, screen_text_chars: 13, caption_chars: 0 } })) });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Video', exact: true }).click();
+  await page.getByLabel('Video file').setInputFiles({ name: 'reel.mp4', mimeType: 'video/mp4', buffer: Buffer.from('fake video') });
+  await page.getByLabel('Caption (optional)').fill('Did you know?');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText(/Video: 42 s · speech transcribed \(en\)/)).toBeVisible();
+  await page.getByText(/What the video says/).click();
+  await expect(page.getByText('NEVER FREEZES')).toBeVisible();
+  const post = calls.find(c => c.path === '/fact-check-video');
+  expect(post.method).toBe('POST');
+  expect(post.body).toContain('reel.mp4');
+  expect(post.body).toContain('Did you know?');
+});
+
+test('video mode explains missing tools and cannot be submitted', async ({ page }) => {
+  await mockBackend(page, { config: { ...liveConfig, video_ready: false,
+    video_message: 'Video checks need ffmpeg. On a Mac: brew install ffmpeg, then restart the backend.' } });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Video', exact: true }).click();
+  await page.getByLabel('Video file').setInputFiles({ name: 'reel.mp4', mimeType: 'video/mp4', buffer: Buffer.from('x') });
+  await expect(page.getByText(/brew install ffmpeg/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Research this claim/ })).toBeDisabled();
 });

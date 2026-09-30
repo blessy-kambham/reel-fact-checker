@@ -55,7 +55,7 @@ def test_article_claims_are_researched_even_when_others_are_omitted():
     assert report.coverage_status == 'passed' and report.omitted_claims
     assert [c.claim for c in report.claims] == [CLAIM_1, CLAIM_2]
     assert all(c.sources_checked == 1 for c in report.claims)
-    assert provider.extraction_input == {'article': ARTICLE}
+    assert provider.extraction_input == {'text': ARTICLE}
     assert any('Other claims in the article were not checked' in text for text in report.limitations)
 
 
