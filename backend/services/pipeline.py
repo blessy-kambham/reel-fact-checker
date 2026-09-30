@@ -20,9 +20,51 @@ def normalized(text: str) -> str:
     return ' '.join(text.split()).casefold()
 
 
-def unresolved(claim: str, reason: str) -> ClaimResult:
+# User-facing explanation for every WithheldReason. Messages never include provider error bodies.
+WITHHELD_MESSAGES = {
+    'coverage_failed': 'Extraction coverage was incomplete or could not be checked, so no research or verdict was attempted.',
+    'no_sources': 'No readable sources were retrieved, so no verdict was attempted.',
+    'search_failed': 'A search direction failed, so a verdict was withheld rather than judged on one-sided research.',
+    'citation_failed': 'At least one proposed citation failed validation, so the verdict was withheld.',
+    'no_relevant_evidence': 'No verified evidence directly supports or contradicts this claim, so no verdict was attempted.',
+    'verdict_check_unavailable': 'The claim-specific verdict check was unavailable; the verdict was withheld.',
+    'unknown_evidence_ids': 'The verdict cited evidence IDs that were not among the verified evidence; it was withheld.',
+    'missing_evidence_ids': 'The verdict did not cite any verified evidence; it was withheld.',
+    'evidence_stance_mismatch': 'The evidence the verdict cited does not have the direction that verdict requires; it was withheld.',
+    'conflicting_evidence': 'Verified evidence supports and contradicts the claim. An unqualified verdict was withheld pending review.',
+    'claim_timeout': 'This claim exceeded its research time limit, so the verdict was withheld.',
+    'provider_failure': 'A research provider failed, so the verdict was withheld.',
+}
+# Reasons that reflect a legitimate research outcome rather than a failed or rejected check.
+COMPLETE_WITHHELD_REASONS = {'no_relevant_evidence', 'conflicting_evidence'}
+
+
+def unresolved(claim: str, reason: str, code: str) -> ClaimResult:
     return ClaimResult(claim=claim, verdict='UNVERIFIABLE', status='incomplete', evidence=[],
-                       limitations=[reason], supporting_search='Incomplete', contradicting_search='Incomplete', sources_checked=0)
+                       limitations=[reason], supporting_search='Incomplete', contradicting_search='Incomplete', sources_checked=0,
+                       withheld_reason=code, withheld_message=WITHHELD_MESSAGES[code])
+
+
+def check_decision(decision, usable):
+    """Return a WithheldReason when a verdict-stage answer is not justified by its cited evidence, else None."""
+    by_id = {c.evidence_id: c for c in usable}
+    selected = set(decision.evidence_ids)
+    stances = {by_id[i].stance for i in selected if i in by_id}
+    if not selected <= by_id.keys():
+        return 'unknown_evidence_ids'
+    if decision.verdict == 'UNVERIFIABLE':
+        return None
+    if not selected:
+        return 'missing_evidence_ids'
+    if not stances & {'FOR', 'AGAINST'}:
+        return 'evidence_stance_mismatch'
+    if decision.verdict == 'TRUE' and 'FOR' not in stances:
+        return 'evidence_stance_mismatch'
+    if decision.verdict == 'FALSE' and 'AGAINST' not in stances:
+        return 'evidence_stance_mismatch'
+    if decision.verdict in ('TRUE', 'FALSE') and {'FOR', 'AGAINST'} <= {c.stance for c in usable}:
+        return 'conflicting_evidence'
+    return None
 
 
 async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
@@ -134,7 +176,8 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
             search_status[direction] = 'Failed'
             warnings.append(str(exc))
     if not sources:
-        result = unresolved(claim.text, 'No readable sources were retrieved. Search snippets are not accepted as verified evidence.')
+        result = unresolved(claim.text, 'No readable sources were retrieved. Search snippets are not accepted as verified evidence.',
+                            'search_failed' if 'Failed' in search_status.values() else 'no_sources')
         return result.model_copy(update={'supporting_search': search_status['FOR'], 'contradicting_search': search_status['AGAINST'], 'limitations': result.limitations + warnings})
     excerpts = {excerpt.id: excerpt for source in sources.values() for excerpt in source_excerpts(source)}
     source_inputs = []
@@ -163,12 +206,19 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
     failed = any(not citation.verified for citation in citations)
     if failed:
         warnings.append(f'{sum(not c.verified for c in citations)} citation(s) failed validation and were excluded.')
-    usable = [citation for citation in citations if citation.verified]
-    verdict = 'UNVERIFIABLE'
-    relevant = any(c.stance in ('FOR', 'AGAINST') for c in usable)
-    if not failed and relevant and 'Failed' not in search_status.values():
-        evidence = [{'id': f'E{i + 1}', 'statement': c.statement, 'quote': c.quote,
-                     'stance': c.stance, 'url': c.url} for i, c in enumerate(usable)]
+    usable = [citation.model_copy(update={'evidence_id': f'E{i + 1}'})
+              for i, citation in enumerate(c for c in citations if c.verified)]
+    search_failed = 'Failed' in search_status.values()
+    decision_verdict, decision_ids, withheld = None, [], None
+    if search_failed:
+        withheld = 'search_failed'
+    elif failed:
+        withheld = 'citation_failed'
+    elif not any(c.stance in ('FOR', 'AGAINST') for c in usable):
+        withheld = 'no_relevant_evidence'
+    else:
+        evidence = [{'id': c.evidence_id, 'statement': c.statement, 'quote': c.quote,
+                     'stance': c.stance, 'url': c.url} for c in usable]
         try:
             decision = await provider.structured(VerdictDecision,
                 'Judge only TARGET ASSERTION using only the supplied verified evidence. '
@@ -181,41 +231,28 @@ async def research_claim(claim, provider, fetch=fetch_text) -> ClaimResult:
                 'the supplied evidence resolves the conflict. Return the evidence IDs supporting the decision. '
                 'Do not use outside knowledge; source repetition is not independent confirmation.',
                 json.dumps({'target_assertion': claim.text, 'verified_evidence': evidence}))
-            allowed = {e['id'] for e in evidence}
-            selected = set(decision.evidence_ids)
-            if not selected <= allowed or (decision.verdict != 'UNVERIFIABLE' and not selected):
-                failed = True
-                warnings.append('Verdict referenced missing or unknown verified evidence; it was withheld.')
-            else:
-                verdict = decision.verdict
-                selected_stances = {e['stance'] for e in evidence if e['id'] in selected}
-                if decision.verdict != 'UNVERIFIABLE' and not selected_stances.intersection({'FOR', 'AGAINST'}):
-                    failed = True
-                if decision.verdict == 'TRUE' and 'FOR' not in selected_stances:
-                    failed = True
-                if decision.verdict == 'FALSE' and 'AGAINST' not in selected_stances:
-                    failed = True
         except (ProviderFailure, asyncio.TimeoutError):
-            failed = True
-            warnings.append('The claim-specific verdict check was unavailable; the verdict was withheld.')
-    if failed or not relevant or 'Failed' in search_status.values():
-        verdict = 'UNVERIFIABLE'
-        warnings.append('A verdict was withheld because evidence or citation checks were incomplete.')
-    if verdict == 'TRUE' and not any(c.stance == 'FOR' for c in usable):
-        verdict = 'UNVERIFIABLE'
-    if verdict == 'FALSE' and not any(c.stance == 'AGAINST' for c in usable):
-        verdict = 'UNVERIFIABLE'
-    stances = {citation.stance for citation in usable}
-    if verdict in ('TRUE', 'FALSE') and {'FOR', 'AGAINST'} <= stances:
-        verdict = 'UNVERIFIABLE'
-        warnings.append('Verified evidence supports and contradicts the claim. An unqualified verdict was withheld pending review.')
+            withheld = 'verdict_check_unavailable'
+        else:
+            decision_verdict = decision.verdict
+            # Model-supplied strings: bound them before storing them in a report.
+            decision_ids = [str(i)[:32] for i in decision.evidence_ids]
+            withheld = check_decision(decision, usable)
+    verdict = decision_verdict if withheld is None else 'UNVERIFIABLE'
+    if withheld:
+        warnings.append(WITHHELD_MESSAGES[withheld])
+    incomplete = search_failed or (withheld is not None and withheld not in COMPLETE_WITHHELD_REASONS)
     if not any(c.stance == 'AGAINST' for c in usable):
         warnings.append('No verified contradicting evidence was identified in the retrieved pages. This does not prove the claim.')
     warnings.append('Citation checks use quote matching and a separate model judgment; human review may still find errors.')
     warnings.append('Source independence, publication dates, and methodology require review; no calibrated confidence score is available.')
-    return ClaimResult(claim=claim.text, verdict=verdict, status='incomplete' if failed or 'Failed' in search_status.values() else 'complete',
+    return ClaimResult(claim=claim.text, verdict=verdict, status='incomplete' if incomplete else 'complete',
                        evidence=usable, rejected_citations=[c for c in citations if not c.verified], limitations=list(dict.fromkeys(warnings)),
-                       supporting_search=search_status['FOR'], contradicting_search=search_status['AGAINST'], sources_checked=len(sources))
+                       supporting_search=search_status['FOR'], contradicting_search=search_status['AGAINST'], sources_checked=len(sources),
+                       verdict_state='withheld' if withheld else 'issued', withheld_reason=withheld,
+                       withheld_message=WITHHELD_MESSAGES[withheld] if withheld else None,
+                       decision_verdict=decision_verdict, decision_evidence_ids=decision_ids,
+                       verdict_evidence_ids=[] if withheld else decision_ids)
 
 
 def exact_submission_preserved(text, extraction):
@@ -276,7 +313,7 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
                   if coverage_status == 'unavailable' else
                   'Extraction did not cover the submission faithfully. No research was started; submit assertions separately.')
         return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(),
-                      intent=extraction.intent, note=reason, claims=[unresolved(text, reason)],
+                      intent=extraction.intent, note=reason, claims=[unresolved(text, reason, 'coverage_failed')],
                       limitations=[reason] + coverage_issues, usage=provider.usage,
                       omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
     limiter = asyncio.Semaphore(2)
@@ -285,9 +322,9 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
             try:
                 return await asyncio.wait_for(research_claim(claim, provider, fetch), timeout=150)
             except asyncio.TimeoutError:
-                return unresolved(claim.text, 'This claim exceeded its research time limit.')
+                return unresolved(claim.text, 'This claim exceeded its research time limit.', 'claim_timeout')
             except ProviderFailure as exc:
-                return unresolved(claim.text, str(exc))
+                return unresolved(claim.text, str(exc), 'provider_failure')
     results = await asyncio.gather(*(branch(c) for c in extraction.claims)) if extraction.intent == 'FACTUAL' else []
     limitations = ['At most three claims and six search results per claim are processed in this local MVP.']
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,

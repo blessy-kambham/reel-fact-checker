@@ -1,6 +1,7 @@
 """Summarize local live traces without making network requests."""
 import argparse
 import json
+from collections import Counter
 from pathlib import Path
 
 
@@ -26,6 +27,10 @@ def summarize(traces, cases):
             'extraction_failure': not any(m.get('stage') == 'Extraction' and m.get('output') for m in trace.get('model', [])),
             'provider_failures': sum('error' in x for x in trace.get('model', []) + trace.get('searches', [])),
             'rejections': [{'code':c.get('verification_code'), 'reason':c['verification'], 'quote':c['quote']} for c in rejected],
+            'claims': [{'claim': c.get('claim'), 'verdict': c.get('verdict'), 'verdict_state': c.get('verdict_state'),
+                        'withheld_reason': c.get('withheld_reason'), 'decision_verdict': c.get('decision_verdict'),
+                        'verdict_evidence_ids': c.get('verdict_evidence_ids', [])} for c in claims],
+            'code_fingerprint': trace.get('code_fingerprint'), 'allowance': trace.get('allowance'),
             'latency_seconds': trace.get('latency_seconds'), 'usage':report.get('usage', {})})
     accepted = sum(r['accepted_citations'] for r in rows)
     total = accepted + sum(r['rejected_citations'] for r in rows)
@@ -39,6 +44,9 @@ def summarize(traces, cases):
         'unsupported_citation_count':sum(r['unsupported_citations'] for r in rows),
         'extraction_failures':sum(r['extraction_failure'] for r in rows),
         'provider_failures':sum(r['provider_failures'] for r in rows),
+        'issued_verdicts':sum(c.get('verdict_state') == 'issued' for r in rows for c in r['claims']),
+        'withheld_reasons':dict(sorted(Counter(c['withheld_reason'] for r in rows for c in r['claims'] if c.get('withheld_reason')).items())),
+        'code_fingerprints':sorted({r['code_fingerprint'] for r in rows if r['code_fingerprint']}),
         'human_reviewed_unsupported_accepted_citations': None,
         'limitation':'Unsupported citation count means proposals rejected by automated checks, not proven false claims. Automated citation acceptance is not human-reviewed precision. Missing extraction requires diagnostic review. Small selected set is not an accuracy benchmark.',
         'results':rows}

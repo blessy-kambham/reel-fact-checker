@@ -21,3 +21,4 @@
   .printing-report .report-limitations,.printing-report .rejected-citations{background:white;border:1px solid #999}
   .printing-report summary{list-style:none;font-weight:700}
 }
+.verdict-basis{display:inline-block;margin-left:8px;border-radius:4px;padding:1px 6px;background:#e0f0d9;color:#2e602a;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}.notice.withheld{background:#f4f5ee;border-left:3px solid #9aad88;padding:8px 12px;margin:4px 0 8px;color:#3f5347}

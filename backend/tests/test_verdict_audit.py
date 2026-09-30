@@ -1,0 +1,169 @@
+"""Every verdict is either issued with the evidence IDs behind it, or withheld with a specific reason."""
+import asyncio
+import json
+import pytest
+from schemas import Analysis, AtomicClaim, EvidenceRelation, ExtractionCoverage, Extraction, VerdictDecision
+from services.pipeline import WITHHELD_MESSAGES, research_claim, run_pipeline
+from services.providers import ProviderFailure
+from tests.test_pipeline import CLAIM, DRAFT, FakeProvider, fake_fetch
+
+AGAINST = DRAFT.model_copy(update={'stance': 'AGAINST', 'statement': 'The sample was limited to one room.'})
+RELATIONS = {'FOR': 'SUPPORTS', 'AGAINST': 'CONTRADICTS', 'CONTEXT': 'BACKGROUND'}
+
+
+class Scripted(FakeProvider):
+    """Returns a fixed verdict-stage decision and, optionally, several evidence selections."""
+    def __init__(self, decision=None, drafts=None, **kwargs):
+        super().__init__(**kwargs)
+        self.decision, self.drafts, self.relations = decision, drafts or [DRAFT], 0
+        self.verdict_inputs = []
+
+    async def structured(self, schema, instructions, data):
+        if schema is Analysis:
+            return Analysis(verdict='TRUE', evidence=self.drafts, limitations=[])
+        if schema is EvidenceRelation:
+            draft = self.drafts[self.relations]
+            self.relations += 1
+            return EvidenceRelation(relation=RELATIONS[draft.stance], reason='Scripted relation')
+        if schema is VerdictDecision:
+            self.verdict_inputs.append(json.loads(data))
+            if isinstance(self.decision, BaseException):
+                raise self.decision
+            if self.decision is not None:
+                return self.decision
+        return await super().structured(schema, instructions, data)
+
+
+def check(provider, claim=CLAIM):
+    return asyncio.run(research_claim(claim, provider, fake_fetch))
+
+
+def assert_withheld(result, reason, status):
+    assert result.verdict == 'UNVERIFIABLE' and result.status == status
+    assert result.verdict_state == 'withheld' and result.withheld_reason == reason
+    assert result.withheld_message == WITHHELD_MESSAGES[reason]
+    if result.sources_checked:  # Early exits keep their own, more detailed limitation text.
+        assert WITHHELD_MESSAGES[reason] in result.limitations
+    assert result.verdict_evidence_ids == []
+
+
+def test_issued_verdict_records_the_evidence_behind_it():
+    result = check(Scripted(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1'])))
+    assert result.verdict == 'TRUE' and result.status == 'complete'
+    assert result.verdict_state == 'issued' and result.withheld_reason is None and result.withheld_message is None
+    assert result.decision_verdict == 'TRUE'
+    assert result.decision_evidence_ids == result.verdict_evidence_ids == ['E1']
+    assert [c.evidence_id for c in result.evidence] == ['E1']
+
+
+def test_evidence_ids_match_what_the_verdict_stage_saw():
+    provider = Scripted(decision=VerdictDecision(verdict='FALSE', evidence_ids=['E2']), drafts=[DRAFT, AGAINST])
+    result = check(provider)
+    sent = {e['id']: e['statement'] for e in provider.verdict_inputs[0]['verified_evidence']}
+    stored = {c.evidence_id: c.statement for c in result.evidence}
+    assert sent == stored and set(stored) == {'E1', 'E2'}
+
+
+def test_unverifiable_decision_is_issued_not_withheld():
+    result = check(Scripted(decision=VerdictDecision(verdict='UNVERIFIABLE', evidence_ids=[])))
+    assert result.verdict == 'UNVERIFIABLE' and result.verdict_state == 'issued' and result.status == 'complete'
+    assert result.withheld_reason is None
+
+
+@pytest.mark.parametrize('decision, reason', [
+    (VerdictDecision(verdict='TRUE', evidence_ids=['E1', 'E9']), 'unknown_evidence_ids'),
+    (VerdictDecision(verdict='UNVERIFIABLE', evidence_ids=['invented']), 'unknown_evidence_ids'),
+    (VerdictDecision(verdict='TRUE', evidence_ids=[]), 'missing_evidence_ids'),
+    (VerdictDecision(verdict='FALSE', evidence_ids=['E1']), 'evidence_stance_mismatch'),
+])
+def test_rejected_decisions_keep_the_raw_answer_for_audit(decision, reason):
+    result = check(Scripted(decision=decision))
+    assert_withheld(result, reason, 'incomplete')
+    assert result.decision_verdict == decision.verdict
+    assert result.decision_evidence_ids == decision.evidence_ids
+    assert result.evidence  # Verified evidence is still shown.
+
+
+def test_context_only_selection_is_a_stance_mismatch():
+    context = DRAFT.model_copy(update={'stance': 'CONTEXT', 'statement': 'The test used one room.'})
+    result = check(Scripted(decision=VerdictDecision(verdict='MISLEADING', evidence_ids=['E2']), drafts=[DRAFT, context]))
+    assert_withheld(result, 'evidence_stance_mismatch', 'incomplete')
+
+
+def test_conflicting_evidence_is_a_complete_research_outcome():
+    result = check(Scripted(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1']), drafts=[DRAFT, AGAINST]))
+    assert_withheld(result, 'conflicting_evidence', 'complete')
+    assert result.decision_verdict == 'TRUE'
+
+
+@pytest.mark.parametrize('error', [ProviderFailure('private detail'), asyncio.TimeoutError()])
+def test_verdict_outage_is_withheld_without_a_decision(error):
+    result = check(Scripted(decision=error))
+    assert_withheld(result, 'verdict_check_unavailable', 'incomplete')
+    assert result.decision_verdict is None and result.decision_evidence_ids == []
+    assert 'private detail' not in result.model_dump_json()
+
+
+def test_long_invented_ids_are_truncated_in_reports():
+    result = check(Scripted(decision=VerdictDecision(verdict='TRUE', evidence_ids=['X' * 500])))
+    assert result.withheld_reason == 'unknown_evidence_ids'
+    assert result.decision_evidence_ids == ['X' * 32]
+
+
+@pytest.mark.parametrize('provider, reason, status', [
+    (Scripted(approved=False), 'citation_failed', 'incomplete'),
+    (Scripted(fail_search=True), 'search_failed', 'incomplete'),
+    (Scripted(drafts=[DRAFT.model_copy(update={'stance': 'CONTEXT'})]), 'no_relevant_evidence', 'complete'),
+])
+def test_verdict_stage_is_skipped_with_a_reason(provider, reason, status):
+    result = check(provider)
+    assert_withheld(result, reason, status)
+    assert provider.verdict_inputs == [] and result.decision_verdict is None
+
+
+def test_unreadable_pages_are_no_sources():
+    async def unreadable(url):
+        raise ValueError('not readable')
+    provider = Scripted()
+    result = asyncio.run(research_claim(CLAIM, provider, unreadable))
+    assert_withheld(result, 'no_sources', 'incomplete')
+
+
+def test_one_failed_search_direction_is_named():
+    class OneSided(Scripted):
+        async def search(self, query):
+            if 'contradicting' in query:
+                raise ProviderFailure('Search unavailable')
+            return await super().search(query)
+    provider = OneSided()
+    result = check(provider)
+    assert_withheld(result, 'search_failed', 'incomplete')
+    assert provider.verdict_inputs == []
+
+
+def test_claim_timeout_and_provider_failure_are_named(monkeypatch):
+    import services.pipeline as pipeline
+    async def slow(*args, **kwargs):
+        raise asyncio.TimeoutError()
+    monkeypatch.setattr(pipeline, 'research_claim', slow)
+    report = asyncio.run(run_pipeline(CLAIM.text, FakeProvider(), fake_fetch))
+    assert report.claims[0].withheld_reason == 'claim_timeout'
+
+    async def failing(*args, **kwargs):
+        raise ProviderFailure('Provider unavailable')
+    monkeypatch.setattr(pipeline, 'research_claim', failing)
+    report = asyncio.run(run_pipeline(CLAIM.text, FakeProvider(), fake_fetch))
+    assert report.claims[0].withheld_reason == 'provider_failure'
+
+
+def test_coverage_failure_is_named():
+    class Uncovered(FakeProvider):
+        async def structured(self, schema, instructions, data):
+            if schema is Extraction:
+                return Extraction(intent='FACTUAL', claims=[AtomicClaim(text='Changed claim', context='')], omitted_claims=False, note='')
+            if schema is ExtractionCoverage:
+                return ExtractionCoverage(complete=False, issues=['Changed wording'])
+            return await super().structured(schema, instructions, data)
+    report = asyncio.run(run_pipeline('Original claim text.', Uncovered(), fake_fetch))
+    assert report.claims[0].withheld_reason == 'coverage_failed'
+    assert report.claims[0].verdict_state == 'withheld'

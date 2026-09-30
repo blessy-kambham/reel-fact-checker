@@ -4,6 +4,10 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
 Verdict = Literal['TRUE', 'FALSE', 'PARTIALLY TRUE', 'MISLEADING', 'UNVERIFIABLE', 'OUTDATED', 'SATIRE']
+# Why the application replaced a verdict with UNVERIFIABLE. None means the verdict stage's answer was issued.
+WithheldReason = Literal['coverage_failed', 'no_sources', 'search_failed', 'citation_failed', 'no_relevant_evidence',
+                         'verdict_check_unavailable', 'unknown_evidence_ids', 'missing_evidence_ids',
+                         'evidence_stance_mismatch', 'conflicting_evidence', 'claim_timeout', 'provider_failure']
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -73,6 +77,8 @@ class Citation(EvidenceDraft):
     url: str | None
     verified: bool
     verification: str
+    # Stable per-claim ID (E1, E2...) assigned to verified evidence; the verdict stage cites these IDs.
+    evidence_id: str | None = None
     proposed_stance: Literal['FOR', 'AGAINST', 'CONTEXT'] | None = None
     relation_reason: str | None = None
     verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable', 'relation_unresolved'] = 'not_checked'
@@ -89,6 +95,13 @@ class ClaimResult(StrictModel):
     supporting_search: str
     contradicting_search: str
     sources_checked: int
+    # Audit trail for the claim-specific verdict stage.
+    verdict_state: Literal['issued', 'withheld'] = 'withheld'
+    withheld_reason: WithheldReason | None = None
+    withheld_message: str | None = None
+    decision_verdict: Verdict | None = Field(default=None, description='Raw verdict returned by the verdict stage; None when it was not called.')
+    decision_evidence_ids: list[str] = Field(default_factory=list, description='Raw evidence IDs returned by the verdict stage, including rejected ones.')
+    verdict_evidence_ids: list[str] = Field(default_factory=list, description='Evidence IDs justifying an issued verdict; empty when withheld.')
 
 class InputSpan(StrictModel):
     start: int

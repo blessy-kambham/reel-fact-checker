@@ -202,9 +202,11 @@ The 12-case real-world starter dataset is `backend/evaluation/real_cases.json`. 
 
 ### Reproduce a budgeted live session
 
-From `backend`, run `.venv/bin/python -m evaluation.live --allow-paid`. From `frontend`, run `VITE_API_BASE_URL=http://127.0.0.1:8765 npm run dev -- --port 5174`, then visit http://127.0.0.1:5174. This temporarily enables the real API in the validation process; it does not edit `.env`. Stop both terminals with Control+C afterward.
+First prepare offline, from `backend`: `.venv/bin/python -m evaluation.live`. This makes no network or paid calls. It fingerprints the exact source that would run (tracked and untracked files under `backend/`, `frontend/src/`, `scripts/` and `.github/`, never `.env` files, keys or generated output), copies it to the ignored `evaluation/results/snapshots/`, reports settings by name only and lists allowances.
 
-The validation allowance is $0.10 of conservatively reserved OpenAI text cost and 12 Tavily searches, with no model retries. Pricing is specific to gpt-4.1-mini. Reservations are written before calls; successful usage reconciles the reservation, while failed calls retain it. The local budget ledger survives restarts. This session used all 12 searches; a restart does not grant more. Any new allowance needs a deliberate new authorization, not deletion of the ledger to bypass the limit. This is a local validation guard, not an account-level billing guarantee or a production budget mechanism. Tavily costs are separate.
+After a new, explicitly approved allowance, start the paid server with the approved limits, for example `.venv/bin/python -m evaluation.live --allow-paid --allowance compound-retest-1 --max-usd 0.10 --max-searches 8`. From `frontend`, run `VITE_API_BASE_URL=http://127.0.0.1:8765 npm run dev -- --port 5174`, then visit http://127.0.0.1:5174. This temporarily enables the real API in the validation process; it does not edit `.env`. Stop both terminals with Control+C afterward.
+
+Each allowance is a named ledger in `evaluation/results/allowances/`, tied to the code fingerprint it was opened with. It survives restarts, its limits can never be raised, and it is refused if the code has changed; a new approval needs a new name. The old `budget.json` ledger is left untouched and is no longer used. Every trace records its allowance, code fingerprint and snapshot. Model calls are never retried. Pricing is specific to gpt-4.1-mini. Reservations are written before calls; successful usage reconciles the reservation, while failed calls retain it. This is a local validation guard, not an account-level billing guarantee or a production budget mechanism. Tavily costs are separate.
 
 Summarize saved traces without network calls, from `backend`:
 
@@ -308,8 +310,16 @@ The new relationship classifier was tested live: Moon light and Moon rotation bo
 The run used approximately $0.07821 and eight Tavily searches, with no retries or provider failures. Changes and results remain local; GitHub has not been updated. See `docs/TEXT_VALIDATION.md` for the case table and limitations.
 
 
-### Local claim-specific verdict stage
+### Claim-specific verdict stage
 
 Final verdicts now come from a separate call receiving only the target assertion and verified evidence. The analyst's candidate verdict, full submission context and research-stage limitations do not feed that decision. Each non-UNVERIFIABLE decision must reference supplied evidence IDs; unknown/missing IDs, unsupported stance combinations or provider failures withhold the verdict. Previously verified evidence remains available for review. Research-stage free-form limitations are excluded from the final report to prevent neighboring-claim explanations from reappearing there; application-generated retrieval and verification warnings remain.
 
-This adds at most one model call per claim after successful citation checks. It does not guarantee semantic isolation: evidence statements can still discuss neighboring facts, and ambiguous pronouns may remain unresolved. 135 tests and 12 policy cases pass offline. Live validation of this stage is pending. All work remains local; GitHub is unchanged.
+This adds at most one model call per claim after successful citation checks. It does not guarantee semantic isolation: evidence statements can still discuss neighboring facts, and ambiguous pronouns may remain unresolved. 135 tests and 12 policy cases pass offline. Live validation of this stage is pending. Committed on the `local-verdict-stage` branch.
+
+### Verdict audit trail and validation-runner preparation
+
+Every claim now states whether its verdict was `issued` or `withheld`. Withheld verdicts carry a specific `withheld_reason` and message (for example `citation_failed`, `unknown_evidence_ids`, `evidence_stance_mismatch`, `conflicting_evidence` or `verdict_check_unavailable`) instead of one generic warning. Verified citations receive stable IDs (E1, E2...), the same IDs the verdict stage sees. Reports keep the verdict stage's raw answer (`decision_verdict`, `decision_evidence_ids`) and, for issued verdicts, the evidence behind them (`verdict_evidence_ids`). The report page shows the withheld reason and marks citations used for the verdict. The trace summarizer counts issued verdicts and withheld reasons.
+
+The validation runner now prepares offline by default, snapshots the exact code including untracked files, and uses named allowances tied to that code. Offline tests cover reservation and tracing of the relation and verdict calls, a budget stop before the verdict call, persistent stops across restarts, search caps and zero retries. Found while testing: when the search cap stops an allowance after one search, the analysis call is refused and the report withholds the claim as `provider_failure`; no call is made.
+
+175 offline tests, 12 policy cases and the frontend build pass. None of this has been validated live.

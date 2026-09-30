@@ -9,7 +9,7 @@ DEMO_TEXT = 'The fictional town of Exampleville cut all traffic by 40% after its
 def demo_report() -> Report:
     return Report(id=str(uuid4()), mode='demo', submitted_text=DEMO_TEXT, created_at=now(), intent='FICTIONAL WALKTHROUGH',
         note='All names, figures, and source excerpts below are invented fixtures. No web search or AI calls were made.',
-        claims=[ClaimResult(claim=DEMO_TEXT, verdict='MISLEADING', status='complete', sources_checked=0,
+        claims=[ClaimResult(claim=DEMO_TEXT, verdict='MISLEADING', status='complete', sources_checked=0, verdict_state='issued',
             supporting_search='Simulated using a local fixture; no search was performed.',
             contradicting_search='Simulated using a local fixture; no search was performed.',
             limitations=['Illustrates how a statistic can lose its original scope. This is not a real-world verdict.',

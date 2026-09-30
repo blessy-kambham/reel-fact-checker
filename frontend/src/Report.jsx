@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 
-function Evidence({ item, demo }) {
+function Evidence({ item, demo, cited }) {
   return <article className="evidence">
-    <span className="evidence-label">{item.stance === 'FOR' ? 'Supporting evidence' : item.stance === 'AGAINST' ? 'Contradicting evidence' : 'Context'}</span>
+    <span className="evidence-label">{item.evidence_id ? `${item.evidence_id} · ` : ''}{item.stance === 'FOR' ? 'Supporting evidence' : item.stance === 'AGAINST' ? 'Contradicting evidence' : 'Context'}</span>
+    {cited && <span className="verdict-basis">Used for verdict</span>}
     <p>{item.statement}</p>
     <blockquote>{item.quote}</blockquote>
     {item.url?.startsWith('https://') ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title} ↗</a> : <strong>{item.title}</strong>}
@@ -53,8 +54,10 @@ export default function Report({ report }) {
       <p className="eyebrow">CLAIM {index + 1} · {claim.status.toUpperCase()}</p>
       <h3>{claim.claim}</h3>
       <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'EXAMPLE: ' : ''}{claim.verdict}</span>
+      {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
+      {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict_evidence_ids?.length > 0 && <p className="report-meta">Verdict based on {claim.verdict_evidence_ids.join(', ')}</p>}
       <p className="report-meta">{claim.sources_checked} pages retrieved · Confidence is not calibrated</p>
-      <div className="evidence-grid">{claim.evidence.map((item, i) => <Evidence key={i} item={item} demo={report.mode === 'demo'} />)}</div>
+      <div className="evidence-grid">{claim.evidence.map((item, i) => <Evidence key={i} item={item} demo={report.mode === 'demo'} cited={claim.verdict_state === 'issued' && claim.verdict_evidence_ids?.includes(item.evidence_id)} />)}</div>
       {!claim.evidence.length && <p>No verified evidence is available for this claim.</p>}
       {claim.rejected_citations?.length > 0 && <details className="rejected-citations">
         <summary>Excluded citations ({claim.rejected_citations.length}) — not evidence</summary>
