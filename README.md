@@ -368,3 +368,8 @@ A proposed citation the relation check finds irrelevant or unresolvable for the 
 - **Guide:** `docs/DEPLOY.md` covers settings, HTTPS, health checks, backups and rollback.
 
 A production-mode rehearsal (built site served by the API, sign-in in a real browser, history, no CSP errors) passed locally. The Docker image itself has not been built here because Docker Hub is unreachable from this environment; build it with Docker Desktop. 265 backend tests, 13 policy cases, 13 browser tests and the frontend build pass.
+
+
+### Live checkpoint 2: video mode verified
+
+Three generated Reel-format test videos ran through the whole pipeline on the Mac. Local Whisper transcribed the speech exactly and the keyframes' on-screen text was read exactly, including a silent video. Verdicts: water boiling point TRUE, Pluto FALSE, and the Great Wall claim correctly withheld because none of its sources could be fetched. The run also exposed and led to fixes for corrupted punctuation in model output, overly strict context checks, reposts counted as independent evidence, and date misreadings. Details in `docs/TEXT_VALIDATION.md`. 270 backend tests and 13 policy cases pass.

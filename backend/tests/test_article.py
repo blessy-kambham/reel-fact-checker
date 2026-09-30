@@ -87,10 +87,32 @@ def test_paraphrased_claims_are_refused_but_verbatim_ones_proceed():
     assert report.claims[0].sources_checked == 1
 
 
-def test_invented_context_is_refused():
+def test_invented_context_is_dropped_and_the_verbatim_claim_is_still_checked():
     provider = ArticleProvider([AtomicClaim(text=CLAIM_2, context='Officials promised a free ferry.')])
-    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE)}))
-    assert report.claims[0].withheld_reason == 'coverage_failed' and provider.queries == []
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)}))
+    assert report.coverage_status == 'passed' and report.claims[0].sources_checked == 1
+    assert all('free ferry' not in query for query in provider.queries)  # The invented context never reaches research.
+    assert any('without surrounding context' in text for text in report.limitations)
+
+
+def test_reposted_copies_of_the_article_are_not_evidence():
+    long_claim = ('City officials said the fictional Harbor Bridge closed on March 3 after inspectors found cracked welds')
+    repost = 'https://aggregator.example.net/harbor-bridge'
+    provider = ArticleProvider([AtomicClaim(text=long_claim, context='')], search_urls=[repost, 'https://evidence.example.org/report'])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE), repost: (repost, 'Reposted: ' + ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)}))
+    claim = report.claims[0]
+    assert claim.sources_checked == 1 and all(c.url != repost for c in claim.evidence)
+    assert any('treated as a copy' in text for text in claim.limitations)
+
+
+def test_short_claims_are_not_treated_as_copies():
+    # A short, common sentence appearing elsewhere is normal corroboration, not a repost.
+    provider = ArticleProvider([AtomicClaim(text=CLAIM_2, context='')])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', CLAIM_2 + '. ' + PAGE)}))
+    assert report.claims[0].sources_checked == 1
 
 
 def test_whitespace_differences_still_count_as_verbatim():
@@ -193,3 +215,18 @@ def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check():
     provider.client = SimpleNamespace(responses=Responses())
     result = asyncio.run(provider.structured(Extraction, 'extract', 'text'))
     assert '\x19' not in result.model_dump_json() and result.claims[0].text == page
+
+
+def test_split_escape_punctuation_variant_is_repaired():
+    # Second corruption form seen in live checkpoint 2: U+0002 followed by the last three hex digits.
+    from services.providers import repair_text
+    assert repair_text('Four astronauts \x02013 three from NASA') == 'Four astronauts – three from NASA'
+    assert repair_text('NASA\x02019s rocket; we\x02019ll see') == 'NASA’s rocket; we’ll see'
+    assert repair_text('Built in 2019, flight 013') == 'Built in 2019, flight 013'  # Real numbers are untouched.
+    assert repair_text('line\nbreak\ttab') == 'line\nbreak\ttab'
+
+
+def test_relation_prompt_treats_differently_written_dates_as_compatible():
+    from services.pipeline import verify_selection
+    import inspect
+    assert 'weekday versus a calendar date' in inspect.getsource(verify_selection)

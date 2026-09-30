@@ -61,7 +61,10 @@ async def run_video_pipeline(path: Path, filename: str, caption: str, provider, 
     if not content:
         return Report(**base, intent='UNRELATED', note='No speech, on-screen text or caption was found, so there was nothing to check.',
                       claims=[], limitations=limitations, coverage_status='not_checked')
-    extraction, results, refused = await select_and_research(
+    extraction, results, refused, context_dropped = await select_and_research(
         content, provider, fetch, kind='the transcript, on-screen text and caption of a short social media video')
+    if context_dropped:
+        limitations.append(f'{context_dropped} claim(s) were checked without surrounding context, because the context '
+                           'supplied was not found word for word in the video.')
     return Report(**base, intent=extraction.intent, note=extraction.note, claims=results, limitations=limitations,
                   omitted_claims=extraction.omitted_claims, coverage_status='incomplete' if refused else 'passed')

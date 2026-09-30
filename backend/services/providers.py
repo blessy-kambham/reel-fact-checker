@@ -1,6 +1,7 @@
 """Real providers only. API errors never produce invented evidence."""
 import base64
 import os
+import re
 import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -9,16 +10,18 @@ class ProviderFailure(Exception):
     pass
 
 
-# Curly punctuation sometimes comes back from the model with its high byte lost (U+2019 -> U+0019),
-# which breaks word-for-word checks and shows as invisible characters. These control characters
-# never belong in text, so they are mapped back to the punctuation they came from.
-_REPAIR = str.maketrans({'\x13': '–', '\x14': '—', '\x18': '‘', '\x19': '’', '\x1c': '“', '\x1d': '”'})
+# Punctuation from the General Punctuation block (U+2010-U+201F: dashes, curly quotes) sometimes comes
+# back from the model corrupted, in two observed forms: the high byte dropped (U+2019 -> U+0019), or
+# U+0002 followed by the last three hex digits as text ("\x02019"). Neither form ever belongs in real
+# text, so both are mapped back to the punctuation they came from.
+_REPAIR = str.maketrans({chr(code): chr(0x2000 + code) for code in range(0x10, 0x20)})
+_SPLIT_ESCAPE = re.compile('\x02(01[0-9a-fA-F])')
 
 
 def repair_text(value):
     """Repair corrupted punctuation in every string of a parsed model output."""
     if isinstance(value, str):
-        return value.translate(_REPAIR)
+        return _SPLIT_ESCAPE.sub(lambda m: chr(0x2000 + int(m.group(1), 16)), value).translate(_REPAIR)
     if isinstance(value, list):
         return [repair_text(item) for item in value]
     if isinstance(value, BaseModel):
