@@ -149,3 +149,25 @@ test('video mode explains missing tools and cannot be submitted', async ({ page 
   await expect(page.getByText(/brew install ffmpeg/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Research this claim/ })).toBeDisabled();
 });
+
+test('a private site asks for the password before showing research', async ({ page }) => {
+  let signedIn = false;
+  await mockBackend(page, {
+    config: () => ({ ...liveConfig, auth: { required: true, signed_in: signedIn } }),
+    login: (route, json, request) => {
+      if (JSON.parse(request.postData()).password !== 'right password') return json(401, { detail: 'Incorrect password.' });
+      signedIn = true;
+      return json(200, { signed_in: true });
+    },
+  });
+  await page.goto('/');
+  await expect(page.getByLabel('Your statement')).toHaveCount(0);
+  await expect(page.getByText('Saved reports')).toHaveCount(0);
+  await page.getByLabel(/access password/).fill('wrong');
+  await page.getByRole('button', { name: /Sign in/ }).click();
+  await expect(page.getByRole('alert')).toContainText('Incorrect password.');
+  await page.getByLabel(/access password/).fill('right password');
+  await page.getByRole('button', { name: /Sign in/ }).click();
+  await expect(page.getByLabel('Your statement')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+});

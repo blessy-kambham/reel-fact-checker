@@ -35,14 +35,16 @@ export function report(overrides = {}, claimOverrides = {}) {
   };
 }
 
-export async function mockBackend(page, { config = liveConfig, factCheck, article, video, history = [], saved = {} } = {}) {
+export async function mockBackend(page, { config = liveConfig, factCheck, article, video, login, history = [], saved = {} } = {}) {
   const calls = [];
   await page.route(`${API}/**`, async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     calls.push({ method: request.method(), path, body: request.postData() });
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-    if (path === '/config') return config === 'down' ? route.abort() : json(200, config);
+    if (path === '/config') return config === 'down' ? route.abort() : json(200, typeof config === 'function' ? config() : config);
+    if (path === '/login' && login) return login(route, json, request);
+    if (path === '/logout') return json(200, { signed_in: false });
     if (path === '/demo') return json(200, report({ mode: 'demo', id: '22222222-2222-4222-8222-222222222222' }));
     if (path === '/fact-check') return factCheck ? factCheck(route, json) : json(200, report());
     if (path === '/fact-check-article') return article ? article(route, json) : json(200, report());

@@ -1,0 +1,17 @@
+# Never send secrets, local data or build output into an image.
+.git
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+**/.venv
+**/venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+backend/data
+backend/evaluation/results
+frontend/dist
+frontend/test-results
+frontend/playwright-report

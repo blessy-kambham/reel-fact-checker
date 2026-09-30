@@ -4,7 +4,8 @@ import Report from './Report';
 import History from './History';
 import './style.css';
 
-const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+// Unset: local development API. Empty string (production build): same origin as the page.
+const apiBase = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
 
 function App() {
   const [claim, setClaim] = useState('');
@@ -17,6 +18,8 @@ function App() {
   const [error, setError] = useState('');
   const [config, setConfig] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
 
   async function checkConfig() {
     setChecking(true);
@@ -38,6 +41,28 @@ function App() {
       if (response.ok) setConfig(await response.json());
     } catch { /* keep the previous status */ }
   }
+
+  async function signIn(event) {
+    event.preventDefault();
+    setSigningIn(true); setError('');
+    try {
+      const response = await fetch(`${apiBase}/login`, { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ password: passwordInput }), signal: AbortSignal.timeout(10000) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Sign-in failed.');
+      setPasswordInput('');
+      await refreshSpending();
+    } catch (err) { setError(err instanceof TypeError ? 'The backend connection failed.' : err.message); }
+    finally { setSigningIn(false); }
+  }
+
+  async function signOut() {
+    try { await fetch(`${apiBase}/logout`, { method: 'POST', signal: AbortSignal.timeout(10000) }); } catch { /* ignore */ }
+    setReport(null);
+    await refreshSpending();
+  }
+
+  const locked = Boolean(config?.auth?.required && !config?.auth?.signed_in);
 
   async function run(demo = false) {
     if (loading) return;
@@ -67,6 +92,13 @@ function App() {
     <section className="card">
       <div className="card-heading"><h2>Check a claim</h2><span className="step">TEXT → EVIDENCE → REPORT</span></div>
       {!config?.live_ready && <aside className="setup-note"><strong>Start here. No accounts needed.</strong><p>Try a fictional example to explore the report. Real research stays off until you configure API access.</p><button className="demo-button" disabled={loading} onClick={() => run(true)}>Explore the free demo <span aria-hidden="true">↗</span></button></aside>}
+      {locked && <form className="sign-in" onSubmit={signIn}>
+        <label htmlFor="app-password">This site is private. Enter the access password to use live research.</label>
+        <input id="app-password" type="password" autoComplete="current-password" value={passwordInput} maxLength={200} required disabled={signingIn} onChange={event => setPasswordInput(event.target.value)} />
+        <button type="submit" disabled={signingIn || !passwordInput}>{signingIn ? 'Signing in…' : 'Sign in'} <span aria-hidden="true">↗</span></button>
+      </form>}
+      {config?.auth?.required && config?.auth?.signed_in && <p className="report-meta">Signed in. <button type="button" className="link-button" onClick={signOut}>Sign out</button></p>}
+      {!locked && <>
       <div className="input-switch" role="group" aria-label="Input type">
         <button type="button" className="small-button" aria-pressed={inputType === 'text'} disabled={loading} onClick={() => setInputType('text')}>Statement</button>
         <button type="button" className="small-button" aria-pressed={inputType === 'article'} disabled={loading} onClick={() => setInputType('article')}>Article link</button>
@@ -94,9 +126,10 @@ function App() {
       {config?.live_ready && <p className="notice">Research sends text to OpenAI and queries to Tavily and may incur provider charges. Reports are experimental; inspect the evidence before relying on a verdict.</p>}
       {config?.live_ready && config?.spending && <p className="report-meta">Today (UTC): about ${config.spending.spent_usd.toFixed(3)} of ${config.spending.limit_usd.toFixed(2)} estimated OpenAI cost · {config.spending.searches} of {config.spending.search_limit} searches{config.spending.stopped ? ' · daily limit reached' : ''}</p>}
       <details className="setup-details"><summary>Connection & API setup</summary><p>{config?.message || 'Backend connection unavailable.'}</p><p>The free demo requires no keys. When you are ready, configure backend/.env using .env.example, then restart FastAPI. Keep keys out of this page and out of chat.</p>{config?.missing_settings?.length > 0 && <p>Missing settings: {config.missing_settings.join(', ')}</p>}<button type="button" className="small-button" disabled={checking || loading} onClick={checkConfig}>{checking ? 'Checking…' : 'Retry connection'}</button></details>
+      </>}
       {error && <div className="error" role="alert">{error}</div>}
       {loading && <p role="status" className="notice">Extracting claims, researching evidence, and checking citations. Live research can take several minutes.</p>}
-      {config && <History apiBase={apiBase} disabled={loading} onOpen={data => { setError(''); setReport(data); }} />}
+      {config && !locked && <History apiBase={apiBase} disabled={loading} onOpen={data => { setError(''); setReport(data); }} />}
     </section>
     <div aria-live="polite">{report && <Report report={report} />}</div>
     <footer><span>Evidence first. Uncertainty made clear.</span><span>Statements, article links and videos.</span></footer>

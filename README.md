@@ -358,3 +358,13 @@ Tested offline with real ffmpeg on generated clips, fake transcription and a fak
 ### Off-topic proposals no longer block verdicts
 
 A proposed citation the relation check finds irrelevant or unresolvable for the claim is now shown under excluded citations but ignored, like proposals that point at material never supplied. A misattributed citation or an unavailable check still withholds the verdict. 252 backend tests pass.
+
+### Deployment preparation and access control
+
+- **One container** (`Dockerfile`) builds the website and serves it from the API on one port; video support is a build option. `.dockerignore` keeps `.env` files, local data and traces out of images (verified with decoy secrets).
+- **Access control** (`services/access.py`): an optional `APP_PASSWORD` with a signed, HttpOnly, SameSite=Strict session cookie; sign-in attempts are throttled. Production (`ENVIRONMENT=production`) refuses live research until a password and a 32+ character `SESSION_SECRET` are set. Research and saved reports require a session when access control is on; video uploads are refused before their body is read.
+- **Per-person limit** of `REPORTS_PER_HOUR` (default 10) on top of the daily spending cap.
+- **Security headers** on every response, including a strict Content-Security-Policy.
+- **Guide:** `docs/DEPLOY.md` covers settings, HTTPS, health checks, backups and rollback.
+
+A production-mode rehearsal (built site served by the API, sign-in in a real browser, history, no CSP errors) passed locally. The Docker image itself has not been built here because Docker Hub is unreachable from this environment; build it with Docker Desktop. 265 backend tests, 13 policy cases, 13 browser tests and the frontend build pass.
