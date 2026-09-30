@@ -105,7 +105,9 @@ class Providers:
             async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
                 response = await client.post('https://api.tavily.com/search',
                     headers={'Authorization': 'Bearer ' + os.environ['TAVILY_API_KEY']},
-                    json={'query': query, 'max_results': 3, 'search_depth': 'basic', 'include_answer': False})
+                    json={'query': query, 'max_results': 3, 'search_depth': 'basic', 'include_answer': False,
+                          # Same credit cost; used only when a page refuses the app's own fetcher.
+                          'include_raw_content': 'text'})
                 response.raise_for_status()
                 results = response.json()['results']
                 if not isinstance(results, list):

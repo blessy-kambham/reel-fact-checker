@@ -8,6 +8,7 @@ function Evidence({ item, demo, cited }) {
     <blockquote>{item.quote}</blockquote>
     {item.url?.startsWith('https://') ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title} ↗</a> : <strong>{item.title}</strong>}
     <p className="verification">{demo ? 'Demo fixture' : item.verified ? 'Quote and attribution checked' : 'Unverified'} · {item.verification}</p>
+    {item.retrieval === 'search_copy' && <p className="verification">Page text from the search provider's copy (the site refused a direct fetch).</p>}
   </article>;
 }
 

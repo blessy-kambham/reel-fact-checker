@@ -16,7 +16,7 @@ Click **Explore the free demo**. Its claim, town, numbers, and excerpts are fict
 - Structured extraction of up to three atomic claims and content intent.
 - Bounded parallel research: two claims at a time, one report at a time per server process.
 - Separate supporting and contradicting searches for each claim.
-- Retrieval of up to six source pages per claim; snippets alone are never verified evidence.
+- Retrieval of up to six source pages per claim; snippets alone are never verified evidence. When a site refuses the app's page reader, the search provider's own extracted text of that page is used instead (no extra cost), and the report labels that evidence and notes it under the claim's limitations.
 - Analysis selects numbered excerpts from retrieved pages; the application copies quotes directly from source text.
 - Citation checks: exact normalized quote matching followed by a separate model check of attribution and stance.
 - Failed citation checks withhold the verdict. Missing research produces UNVERIFIABLE.
@@ -373,3 +373,5 @@ A production-mode rehearsal (built site served by the API, sign-in in a real bro
 ### Live checkpoint 2: video mode verified
 
 Three generated Reel-format test videos ran through the whole pipeline on the Mac. Local Whisper transcribed the speech exactly and the keyframes' on-screen text was read exactly, including a silent video. Verdicts: water boiling point TRUE, Pluto FALSE, and the Great Wall claim correctly withheld because none of its sources could be fetched. The run also exposed and led to fixes for corrupted punctuation in model output, overly strict context checks, reposts counted as independent evidence, and date misreadings. Details in `docs/TEXT_VALIDATION.md`. 270 backend tests and 13 policy cases pass.
+
+Follow-up: pages that refuse the app's reader now fall back to the search provider's extracted page text, clearly labelled (same search cost). 274 backend tests, 13 policy cases and 14 browser tests pass.

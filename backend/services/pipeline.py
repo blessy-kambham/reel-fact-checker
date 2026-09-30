@@ -121,7 +121,7 @@ async def verify_citation(draft, sources, provider, claim_text="") -> Citation:
             code = 'check_unavailable'
             reason = 'The attribution check could not complete. This citation was not verified.'
     return Citation(**draft.model_dump(), title=source.title, url=source.url, verified=verified,
-                    verification=reason, verification_code=code, retrieved_at=source.retrieved_at,
+                    verification=reason, verification_code=code, retrieved_at=source.retrieved_at, retrieval=source.retrieval,
                     source_text_sha256=hashlib.sha256(source.text.encode('utf-8')).hexdigest())
 
 
@@ -135,6 +135,7 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
                         verification='Rejected: selected source or excerpt was not supplied for this claim.',
                         verification_code='unknown_source' if source is None else 'unknown_excerpt',
                         retrieved_at=source.retrieved_at if source else None,
+                        retrieval=source.retrieval if source else None,
                         source_text_sha256=hashlib.sha256(source.text.encode('utf-8')).hexdigest() if source else None)
     # The model never supplies quote text. Reconstruct it from the source itself.
     quote = source.text[excerpt.start:excerpt.end]
@@ -174,7 +175,7 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
     if stance is None:
         return Citation(source_id=selection.source_id, quote=quote, statement=selection.statement,
                         stance=selection.stance, title=source.title, url=source.url, verified=False,
-                        verification=reason, verification_code=code, retrieved_at=source.retrieved_at,
+                        verification=reason, verification_code=code, retrieved_at=source.retrieved_at, retrieval=source.retrieval,
                         source_text_sha256=hashlib.sha256(source.text.encode('utf-8')).hexdigest(), **metadata)
     draft = EvidenceDraft(source_id=selection.source_id, quote=quote,
                           statement=selection.statement, stance=stance)
@@ -182,6 +183,19 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
     citation = await verify_citation(draft, sources, provider, claim_text)
     return citation.model_copy(update=metadata)
 
+
+
+SEARCH_COPY_MIN_CHARS = 200
+
+
+def search_copy(hit) -> str:
+    """The search provider's extracted text for a page the app could not fetch itself, normalized and
+    capped like fetched text. Raises when it is missing or too short to be a page (not just a snippet)."""
+    raw = hit.get('raw_content')
+    text = ' '.join(raw.split())[:18000] if isinstance(raw, str) else ''
+    if len(text) < SEARCH_COPY_MIN_CHARS:
+        raise ValueError('No usable page text from the search provider.')
+    return text
 
 
 async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(), copy_markers=()) -> ClaimResult:
@@ -203,7 +217,12 @@ async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(),
                     continue
                 urls.add(url)
                 try:
-                    final_url, text = await fetch(url)
+                    retrieval = 'fetched'
+                    try:
+                        final_url, text = await fetch(url)
+                    except Exception:
+                        final_url, text = url, search_copy(hit)
+                        retrieval = 'search_copy'
                     if any(s.url == final_url for s in sources.values()) or page_key(final_url) in exclude:
                         continue
                     if markers and any(marker in loose(text) for marker in markers):
@@ -211,7 +230,10 @@ async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(),
                         continue
                     source_id = f'S{len(sources) + 1}'
                     sources[source_id] = Source(id=source_id, title=str(hit.get('title', 'Source'))[:250],
-                                                url=final_url, text=text, retrieved_at=now())
+                                                url=final_url, text=text, retrieved_at=now(), retrieval=retrieval)
+                    if retrieval == 'search_copy':
+                        warnings.append(f'{source_id} refused the app\'s page reader; its text is the search provider\'s '
+                                        'copy of the page, not a copy fetched by this app.')
                     search_status[direction] = 'Search completed and pages retrieved; see evidence below.'
                 except Exception:
                     warnings.append('A search result could not be retrieved safely as readable text; it was excluded.')

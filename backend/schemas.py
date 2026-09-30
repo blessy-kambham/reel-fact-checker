@@ -67,6 +67,8 @@ class Source(StrictModel):
     text: str
     retrieved_at: str
     source_type: str = 'Unrated; assess methodology and relevance'
+    # 'search_copy': the page refused the app's fetcher, so the search provider's extracted text was used.
+    retrieval: Literal['fetched', 'search_copy'] = 'fetched'
 
 class Citation(EvidenceDraft):
     # Empty only when an invalid selection has no source text to quote.
@@ -84,6 +86,7 @@ class Citation(EvidenceDraft):
     relation_reason: str | None = None
     verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable', 'relation_unresolved'] = 'not_checked'
     retrieved_at: str | None = None
+    retrieval: Literal['fetched', 'search_copy'] | None = None
     source_text_sha256: str | None = None
 
 class ClaimResult(StrictModel):

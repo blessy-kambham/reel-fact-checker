@@ -171,3 +171,13 @@ test('a private site asks for the password before showing research', async ({ pa
   await expect(page.getByLabel('Your statement')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
 });
+
+test('evidence taken from the search provider copy is labelled', async ({ page }) => {
+  const [first, second] = report().claims[0].evidence;
+  await mockBackend(page, { factCheck: (route, json) => json(200, report({}, {
+    evidence: [{ ...first, retrieval: 'search_copy' }, { ...second, retrieval: 'fetched' }] })) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText(/search provider's copy/)).toHaveCount(1);
+});
