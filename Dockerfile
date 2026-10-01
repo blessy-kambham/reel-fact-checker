@@ -31,7 +31,7 @@ ENV ENVIRONMENT=production \
     COOKIE_SECURE=true \
     HF_HOME=/data/models \
     PORT=8000
-VOLUME ["/data"]
+# No VOLUME instruction: some platforms (Railway) reject it. Mount /data with `docker run -v` or the host's volume setting.
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT', '8000'), timeout=4)"

@@ -41,6 +41,18 @@ docker run -d --name reel-fact-checker -p 8000:8000 \
 Set by the image, normally unchanged: `ENVIRONMENT=production`, `DATA_DIR=/data`, `FRONTEND_DIST=/app/frontend`,
 `COOKIE_SECURE=true`, `PORT=8000`.
 
+## Railway (chosen host)
+
+1. railway.com → New Project → Deploy from GitHub repo → `blessy-kambham/reel-fact-checker`, branch `main`. Railway finds the `Dockerfile`.
+2. Service → Settings → Networking → Generate Domain (HTTPS is automatic).
+3. Right-click the service → Attach Volume, mount path `/data` (1 GB is plenty without video).
+4. Service → Variables: the required settings from the table above, plus
+   - `RAILWAY_RUN_UID=0` (Railway volumes are root-owned; without it saving reports fails),
+   - `TRUST_PROXY_HEADERS=true` (Railway's proxy sets `X-Forwarded-For`),
+   - optional `WITH_VIDEO=true` to build with video (needs about 2 GB memory; roughly doubles cost).
+5. Deploy, open the domain, sign in with `APP_PASSWORD`, check `/config` shows live research ready.
+6. Set a usage limit under Workspace → Usage, and spending limits in the OpenAI and Tavily accounts.
+
 ## HTTPS
 
 Put the container behind a reverse proxy or platform that terminates HTTPS. Sign-in cookies are
