@@ -6,6 +6,7 @@ import tempfile
 from uuid import UUID
 from pathlib import Path
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
@@ -27,6 +28,14 @@ from services.pipeline import run_pipeline
 from services.providers import Providers, ProviderFailure, missing_settings
 
 load_dotenv(Path(__file__).with_name('.env'))
+STARTED_AT = datetime.now(timezone.utc).isoformat(timespec='seconds')
+# Names only, never values: lets a deployment be diagnosed from /config.
+DIAGNOSED_SETTINGS = ('OPENAI_API_KEY', 'OPENAI_MODEL', 'TAVILY_API_KEY', 'ENABLE_LIVE_RESEARCH', 'APP_PASSWORD', 'SESSION_SECRET')
+
+
+def setting_states():
+    return {name: 'absent' if name not in os.environ else 'set' if os.environ[name].strip() else 'empty'
+            for name in DIAGNOSED_SETTINGS}
 DATA_DIR = Path(os.getenv('DATA_DIR') or Path(__file__).with_name('data'))
 DEFAULT_DAILY_USD, DEFAULT_DAILY_SEARCHES = '0.50', 40
 
@@ -111,7 +120,7 @@ def health():
 @app.get('/config')
 def config(request: Request):
     missing = missing_settings()
-    enabled = os.getenv('ENABLE_LIVE_RESEARCH', '').lower() == 'true'
+    enabled = os.getenv('ENABLE_LIVE_RESEARCH', '').strip().lower() == 'true'
     ready, message, spending = enabled and not missing, 'Live research is ready.', None
     if not ready:
         message = 'Free demo is available. Live research is not configured or enabled.'
@@ -131,7 +140,8 @@ def config(request: Request):
     return {'live_ready': ready, 'live_enabled': enabled, 'missing_settings': missing, 'max_claims': 3,
             'spending': spending, 'message': message, 'video_ready': ready and video_ready, 'video_message': video_message,
             'auth': {'required': access.auth_required(), 'signed_in': access.valid_session(request.cookies.get(access.COOKIE))},
-            'reports_per_hour': access.reports_per_hour()}
+            'reports_per_hour': access.reports_per_hour(),
+            'started_at': STARTED_AT, 'setting_states': setting_states()}
 
 @app.get('/demo', response_model=Report)
 def demo():

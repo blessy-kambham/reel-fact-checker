@@ -155,3 +155,16 @@ def test_built_frontend_is_served_without_shadowing_the_api(tmp_path):
         assert c.get('/../../backend/.env').status_code == 404
     assert not main.mount_frontend(FastAPI(), str(tmp_path / 'missing'))
     assert not main.mount_frontend(FastAPI(), None)
+
+
+def test_config_reports_setting_states_without_values(protected):
+    protected.setenv('OPENAI_MODEL', '   ')
+    protected.delenv('TAVILY_API_KEY')
+    protected.setenv('ENABLE_LIVE_RESEARCH', ' TRUE ')
+    with client() as c:
+        response = c.get('/config')
+        body = response.json()
+        assert body['setting_states'] == {'OPENAI_API_KEY': 'set', 'OPENAI_MODEL': 'empty', 'TAVILY_API_KEY': 'absent',
+                                          'ENABLE_LIVE_RESEARCH': 'set', 'APP_PASSWORD': 'set', 'SESSION_SECRET': 'set'}
+        assert body['live_enabled'] is True and body['started_at'].endswith('+00:00')
+        assert PASSWORD not in response.text and SECRET not in response.text and 'offline-test' not in response.text
