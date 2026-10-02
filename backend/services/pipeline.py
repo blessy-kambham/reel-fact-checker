@@ -400,7 +400,7 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
                       limitations=[reason] + coverage_issues, usage=provider.usage,
                       omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
     results = await research_all(extraction.claims, provider, fetch) if extraction.intent == 'FACTUAL' else []
-    limitations = ['At most three claims and six search results per claim are processed in this local MVP.']
+    limitations = ['At most three claims and six search results per claim are checked per report.']
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
                   note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
 

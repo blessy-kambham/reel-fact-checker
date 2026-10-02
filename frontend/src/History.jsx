@@ -16,7 +16,7 @@ export default function History({ apiBase, onOpen, disabled }) {
   async function load() {
     setBusy(true); setMessage('');
     try { setItems((await request('/history')).reports); }
-    catch (err) { setMessage(err instanceof TypeError ? 'Could not reach the backend.' : err.message); }
+    catch (err) { setMessage(err instanceof TypeError ? 'Could not reach the server.' : err.message); }
     finally { setBusy(false); }
   }
 
@@ -37,7 +37,7 @@ export default function History({ apiBase, onOpen, disabled }) {
 
   return <details className="history" onToggle={event => { if (event.currentTarget.open && items === null) load(); }}>
     <summary>Saved reports</summary>
-    <p className="report-meta">Live reports are saved on this computer only. Demo reports are not saved.</p>
+    <p className="report-meta">Your past reports. Delete any you no longer need.</p>
     {message && <p className="error" role="alert">{message}</p>}
     {items?.length === 0 && <p className="report-meta">No saved reports yet.</p>}
     <ul>{items?.map(item => <li key={item.id} className="history-item">

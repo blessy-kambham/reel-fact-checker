@@ -32,7 +32,7 @@ function App() {
       setError('');
     } catch {
       setConfig(null);
-      setError('Could not reach the backend. Start FastAPI on port 8000, then retry the connection.');
+      setError('Could not reach the server. Try again in a moment.');
     } finally { setChecking(false); }
   }
   useEffect(() => { checkConfig(); }, []);
@@ -54,7 +54,7 @@ function App() {
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Sign-in failed.');
       setPasswordInput('');
       await refreshSpending();
-    } catch (err) { setError(err instanceof TypeError ? 'The backend connection failed.' : err.message); }
+    } catch (err) { setError(err instanceof TypeError ? 'The connection failed. Try again in a moment.' : err.message); }
     finally { setSigningIn(false); }
   }
 
@@ -82,10 +82,10 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : video ? 'Please choose an MP4, MOV or WebM video and a caption under 2,200 characters.' : article ? 'Please enter a public https:// article link.' : 'Please enter a claim between 1 and 5,000 characters.');
-      if (!Array.isArray(data.claims) || !['live', 'demo'].includes(data.mode)) throw new Error('Unexpected backend response. Restart the backend and retry.');
+      if (!Array.isArray(data.claims) || !['live', 'demo'].includes(data.mode)) throw new Error('Unexpected response from the server. Try again.');
       setReport(data);
     } catch (err) {
-      setError(err.name === 'TimeoutError' ? 'The request timed out. Try again with a shorter claim.' : err instanceof TypeError ? 'The backend connection failed. Check the server and try again.' : err.message);
+      setError(err.name === 'TimeoutError' ? 'The request timed out. Try again with a shorter claim.' : err instanceof TypeError ? 'The connection failed. Try again in a moment.' : err.message);
     } finally { setLoading(false); if (!demo) refreshSpending(); }
   }
   return <main>
@@ -96,7 +96,7 @@ function App() {
     </section>
     <section className="card">
       <div className="card-heading"><h2>Check a claim</h2></div>
-      {!config?.live_ready && <aside className="setup-note"><strong>Start here. No accounts needed.</strong><p>Try a fictional example to explore the report. Real research stays off until you configure API access.</p><button className="demo-button" disabled={loading} onClick={() => run(true)}>Explore the free demo</button></aside>}
+      {!config?.live_ready && <aside className="setup-note"><strong>Try the demo.</strong><p>Explore a fictional example report. Live research is switched off on this copy.</p><button className="demo-button" disabled={loading} onClick={() => run(true)}>Explore the free demo</button></aside>}
       {locked && <form className="sign-in" onSubmit={signIn}>
         <label htmlFor="app-password">This site is private. Enter the access password to use live research.</label>
         <input id="app-password" type="password" autoComplete="current-password" value={passwordInput} maxLength={200} required disabled={signingIn} onChange={event => setPasswordInput(event.target.value)} />
@@ -113,31 +113,34 @@ function App() {
         {inputType === 'text' ? <>
           <label htmlFor="claim">Your statement</label>
           <textarea id="claim" value={claim} maxLength={5000} required disabled={loading} rows={4} placeholder="Paste a factual statement you want to investigate…" aria-describedby="claim-help" onChange={event => setClaim(event.target.value)} />
-          <div className="input-meta" id="claim-help"><span>Text input · Up to 3 claims per report</span><span>{claim.length.toLocaleString()} / 5,000</span></div>
+          <div className="input-meta" id="claim-help"><span>Up to 3 claims per report</span><span>{claim.length.toLocaleString()} / 5,000</span></div>
         </> : inputType === 'video' ? <>
           <label htmlFor="video-file">Video file</label>
           <input id="video-file" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" required disabled={loading} aria-describedby="video-help" onChange={event => setVideoFile(event.target.files?.[0] || null)} />
           <label htmlFor="video-caption">Caption (optional)</label>
           <textarea id="video-caption" value={caption} maxLength={2200} disabled={loading} rows={2} placeholder="Paste the post's caption if it makes claims…" onChange={event => setCaption(event.target.value)} />
-          <div className="input-meta" id="video-help"><span>MP4, MOV or WebM · up to 3 minutes and 100 MB · processed on this computer</span><span>{caption.length.toLocaleString()} / 2,200</span></div>
+          <div className="input-meta" id="video-help"><span>MP4, MOV or WebM, up to 3 minutes and 100 MB</span><span>{caption.length.toLocaleString()} / 2,200</span></div>
           {config && !config.video_ready && <p className="notice" role="note">{config.video_message}</p>}
         </> : <>
           <label htmlFor="article-url">Article link</label>
           <input id="article-url" type="url" value={articleUrl} maxLength={2000} required disabled={loading} placeholder="https://…" aria-describedby="article-help" onChange={event => setArticleUrl(event.target.value)} />
-          <div className="input-meta" id="article-help"><span>Public https:// news or blog page · Up to 3 central claims are checked</span></div>
+          <div className="input-meta" id="article-help"><span>A public news or blog page. Up to 3 central claims are checked.</span></div>
         </>}
         <button disabled={loading || !(inputType === 'text' ? claim.trim() : inputType === 'video' ? videoFile && config?.video_ready : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'}</button>
       </form>
-      {config?.live_ready && <p className="notice">Research sends text to OpenAI and queries to Tavily and may incur provider charges. Reports are experimental; inspect the evidence before relying on a verdict.</p>}
-      {config?.live_ready && config?.spending && <p className="report-meta">Today (UTC): about ${config.spending.spent_usd.toFixed(3)} of ${config.spending.limit_usd.toFixed(2)} estimated OpenAI cost · {config.spending.searches} of {config.spending.search_limit} searches{config.spending.stopped ? ' · daily limit reached' : ''}</p>}
-      <details className="setup-details"><summary>Connection & API setup</summary><p>{config?.message || 'Backend connection unavailable.'}</p><p>The free demo requires no keys. When you are ready, configure backend/.env using .env.example, then restart FastAPI. Keep keys out of this page and out of chat.</p>{config?.missing_settings?.length > 0 && <p>Missing settings: {config.missing_settings.join(', ')}</p>}<button type="button" className="small-button" disabled={checking || loading} onClick={checkConfig}>{checking ? 'Checking…' : 'Retry connection'}</button></details>
+      {config?.live_ready && <p className="notice">Verdicts are automated. Read the evidence before relying on one.</p>}
+      {config?.spending?.stopped && <p className="notice withheld" role="note">Today's research limit has been reached. It resets at midnight UTC.</p>}
+      <details className="setup-details"><summary>Status</summary><p>{config?.message || 'Server connection unavailable.'}</p>
+        {config?.live_ready && config?.spending && <p>Today's usage: about ${config.spending.spent_usd.toFixed(3)} of ${config.spending.limit_usd.toFixed(2)}, {config.spending.searches} of {config.spending.search_limit} searches.</p>}
+        {config?.missing_settings?.length > 0 && <p>Missing settings: {config.missing_settings.join(', ')}</p>}
+        <button type="button" className="small-button" disabled={checking || loading} onClick={checkConfig}>{checking ? 'Checking…' : 'Retry connection'}</button></details>
       </>}
       {error && <div className="error" role="alert">{error}</div>}
-      {loading && <p role="status" className="notice">Extracting claims, researching evidence, and checking citations. Live research can take several minutes.</p>}
+      {loading && <p role="status" className="notice">Researching the claim and checking citations. This can take a minute or two.</p>}
       {config && !locked && <History apiBase={apiBase} disabled={loading} onOpen={data => { setError(''); setReport(data); }} />}
     </section>
     <div aria-live="polite">{report && <Report report={report} />}</div>
-    <footer><span>Evidence first. Uncertainty made clear.</span><span>Statements, article links and videos.</span></footer>
+    <footer><span>Evidence first. Uncertainty made clear.</span></footer>
   </main>;
 }
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);

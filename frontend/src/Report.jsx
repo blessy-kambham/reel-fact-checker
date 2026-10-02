@@ -53,8 +53,8 @@ export default function Report({ report }) {
     {report.input_type === 'video' && report.source_text && <details className="video-content"><summary>What the video says (transcript, on-screen text, caption)</summary><p className="report-meta">Automatically transcribed and read; check it against the video.</p><pre>{report.source_text}</pre></details>}
     {!['article', 'video'].includes(report.input_type) && ['incomplete', 'unavailable'].includes(report.coverage_status) && <p className="notice" role="alert">Extraction coverage {report.coverage_status}. No research was started and no verdict was established. Submit each assertion separately.</p>}
     {report.omitted_claims && !report.coverage_status && <p className="notice" role="alert">Incomplete coverage: some assertions were omitted. Verdicts are withheld. Submit each assertion separately.</p>}
-    <p className="report-meta">Report ID: {report.id}</p><p className="notice">{report.note}</p>
-    <p className="report-meta">{new Date(report.created_at).toLocaleString()} · {report.claims.length} claims · {report.usage.search_calls} searches · {report.usage.model_calls} model calls</p>
+    {report.note && <p className="notice">{report.note}</p>}
+    <p className="report-meta">{new Date(report.created_at).toLocaleString()}, {report.claims.length} {report.claims.length === 1 ? 'claim' : 'claims'} checked</p>
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}
     {report.claims.map((claim, index) => <article className="claim-result" key={index}>
       <p className="claim-number">Claim {index + 1} ({claim.status})</p>
@@ -62,7 +62,7 @@ export default function Report({ report }) {
       <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'Example: ' : ''}{claim.verdict}</span>
       {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
       {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
-      <p className="report-meta">{claim.sources_checked} pages retrieved · Confidence is not calibrated</p>
+      <p className="report-meta">{claim.sources_checked} {claim.sources_checked === 1 ? 'page' : 'pages'} read</p>
       {(() => {
         const demo = report.mode === 'demo';
         const usedIds = !demo && claim.verdict_state === 'issued' ? claim.verdict_evidence_ids || [] : [];
@@ -97,6 +97,6 @@ export default function Report({ report }) {
       </details>}
       <details><summary>Research coverage & limitations</summary><p><strong>Supporting search:</strong> {claim.supporting_search}</p><p><strong>Contradicting search:</strong> {claim.contradicting_search}</p><ul>{claim.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
     </article>)}
-    <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul><p className="screen-only">Live reports are also saved on this computer under Saved reports. Download JSON or choose Print / Save PDF to keep your own copy.</p></aside>
+    <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul>{report.mode === 'live' && <p className="screen-only">This report is also kept under Saved reports.</p>}</aside>
   </section>;
 }

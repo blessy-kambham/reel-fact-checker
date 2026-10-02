@@ -15,6 +15,8 @@ test('free demo works without live research and downloads JSON', async ({ page }
 test('live report separates verdict evidence and flags a single source', async ({ page }) => {
   const calls = await mockBackend(page);
   await page.goto('/');
+  await expect(page.getByText(/OpenAI|Tavily/)).toHaveCount(0);
+  await page.getByText('Status', { exact: true }).click();
   await expect(page.getByText(/about \$0\.031 of \$0\.50/)).toBeVisible();
   await page.getByLabel('Your statement').fill('The fictional tower is 300 metres tall.');
   await page.getByRole('button', { name: /Research this claim/ }).click();
@@ -71,7 +73,7 @@ test('backend errors are shown to the user', async ({ page }) => {
 test('an unreachable backend is explained', async ({ page }) => {
   await mockBackend(page, { config: 'down' });
   await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText('Could not reach the backend');
+  await expect(page.getByRole('alert')).toContainText('Could not reach the server');
 });
 
 test('article links go to the article route and show the source', async ({ page }) => {
