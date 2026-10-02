@@ -50,7 +50,7 @@ Set by the image, normally unchanged: `ENVIRONMENT=production`, `DATA_DIR=/data`
    - `RAILWAY_RUN_UID=0` (Railway volumes are root-owned; without it saving reports fails),
    - `TRUST_PROXY_HEADERS=true` (Railway's proxy sets `X-Forwarded-For`),
    - optional `WITH_VIDEO=true` to build with video (needs about 2 GB memory; roughly doubles cost).
-5. Deploy, open the domain, sign in with `APP_PASSWORD`, check `/config` shows live research ready.
+5. Deploy, open the domain, sign in with `APP_PASSWORD`, and open `/config` in your own browser: it should show `live_ready: true`. `setting_states` lists each setting as set, empty or absent (names only) and `started_at` shows when the running copy started, so you can tell whether a new deployment is live. Add variables on the service's own Variables tab; project-level Shared Variables do nothing until attached to the service.
 6. Set a usage limit under Workspace → Usage, and spending limits in the OpenAI and Tavily accounts.
 
 ## HTTPS

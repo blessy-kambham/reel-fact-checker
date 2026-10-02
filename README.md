@@ -375,3 +375,7 @@ A production-mode rehearsal (built site served by the API, sign-in in a real bro
 Three generated Reel-format test videos ran through the whole pipeline on the Mac. Local Whisper transcribed the speech exactly and the keyframes' on-screen text was read exactly, including a silent video. Verdicts: water boiling point TRUE, Pluto FALSE, and the Great Wall claim correctly withheld because none of its sources could be fetched. The run also exposed and led to fixes for corrupted punctuation in model output, overly strict context checks, reposts counted as independent evidence, and date misreadings. Details in `docs/TEXT_VALIDATION.md`. 270 backend tests and 13 policy cases pass.
 
 Follow-up: pages that refuse the app's reader now fall back to the search provider's extracted page text, clearly labelled (same search cost). 274 backend tests, 13 policy cases and 14 browser tests pass. Live check: the Great Wall video, previously withheld, is now correctly FALSE from search-copy sources ($0.017).
+
+### Deployed
+
+The app runs on Railway (text and article modes, password sign-in) and redeploys from `main`. See `docs/DEPLOY.md` for the steps and for how to diagnose a deployment from `/config`.

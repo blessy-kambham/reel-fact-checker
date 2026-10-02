@@ -137,6 +137,7 @@ def test_security_headers_are_set(env):
         headers = c.get('/health').headers
         assert headers['x-content-type-options'] == 'nosniff' and headers['x-frame-options'] == 'DENY'
         assert "frame-ancestors 'none'" in headers['content-security-policy']
+        assert headers['cache-control'] == 'no-store' and c.get('/config').headers['cache-control'] == 'no-store'
 
 
 def test_built_frontend_is_served_without_shadowing_the_api(tmp_path):
@@ -153,6 +154,7 @@ def test_built_frontend_is_served_without_shadowing_the_api(tmp_path):
         assert c.get('/assets/app.js').status_code == 200
         assert c.get('/health').json() == {'status': 'ok'}
         assert c.get('/../../backend/.env').status_code == 404
+        assert 'cache-control' not in c.get('/assets/app.js').headers  # Static files stay cacheable.
     assert not main.mount_frontend(FastAPI(), str(tmp_path / 'missing'))
     assert not main.mount_frontend(FastAPI(), None)
 
@@ -168,3 +170,11 @@ def test_config_reports_setting_states_without_values(protected):
                                           'ENABLE_LIVE_RESEARCH': 'set', 'APP_PASSWORD': 'set', 'SESSION_SECRET': 'set'}
         assert body['live_enabled'] is True and body['started_at'].endswith('+00:00')
         assert PASSWORD not in response.text and SECRET not in response.text and 'offline-test' not in response.text
+
+
+def test_production_explains_missing_video_support_without_mac_instructions(protected, monkeypatch):
+    protected.setenv('ENVIRONMENT', 'production')
+    monkeypatch.setattr(main.media, 'tools_available', lambda: False)
+    with client() as c:
+        message = c.get('/config').json()['video_message']
+        assert 'WITH_VIDEO' in message and 'brew' not in message

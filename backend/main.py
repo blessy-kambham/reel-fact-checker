@@ -63,6 +63,8 @@ def transcriber():
 
 def video_status():
     if not media.tools_available():
+        if access.production():
+            return False, 'Video checks are not included in this deployment (build with WITH_VIDEO=true to add them).'
         return False, 'Video checks need ffmpeg. On a Mac: brew install ffmpeg, then restart the backend.'
     if not LocalWhisper.installed():
         return False, 'Video checks need local transcription. Run: pip install -r requirements-video.txt, then restart the backend.'
@@ -293,6 +295,9 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
+    # API answers (status, reports, history) must never be served from a browser or proxy cache.
+    if response.headers.get('content-type', '').startswith('application/json'):
+        response.headers.setdefault('Cache-Control', 'no-store')
     return response
 
 
