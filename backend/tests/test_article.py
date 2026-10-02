@@ -190,7 +190,7 @@ def test_dropped_apostrophes_and_straight_quotes_still_count_as_verbatim():
 
 
 def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check(monkeypatch):
-    # Exact failure from live checkpoint 2: the model returned U+0019 for U+2019.
+    # Seen in live validation: the model returned U+0019 for U+2019.
     import asyncio
     from types import SimpleNamespace
     from services.article import verbatim
@@ -218,7 +218,7 @@ def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check(monke
 
 
 def test_split_escape_punctuation_variant_is_repaired():
-    # Second corruption form seen in live checkpoint 2: U+0002 followed by the last three hex digits.
+    # Second corruption form seen in live validation: U+0002 followed by the last three hex digits.
     from services.providers import repair_text
     assert repair_text('Four astronauts \x02013 three from NASA') == 'Four astronauts – three from NASA'
     assert repair_text('NASA\x02019s rocket; we\x02019ll see') == 'NASA’s rocket; we’ll see'

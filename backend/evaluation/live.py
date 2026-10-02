@@ -7,7 +7,7 @@
   python -m evaluation.live --allow-paid --allowance NAME --max-usd 0.10 --max-searches 8
       Starts the paid validation server under a named allowance. An allowance is tied to the code
       fingerprint it was opened with, persists across restarts, can never be raised, and is refused
-      if the code has changed. A new approval needs a new NAME; old ledgers are never reset.
+      if the code has changed. A new budget needs a new NAME; old ledgers are never reset.
 
 Generated traces stay local. Never enable this server on a public interface.
 """
@@ -28,7 +28,7 @@ from services.providers import Providers, ProviderFailure
 
 RESULTS = Path(__file__).with_name('results')
 ALLOWANCES = 'allowances'
-# Sanity ceilings for a single approval; the approved values are passed explicitly and usually far lower.
+# Sanity ceilings for a single allowance; real limits are passed explicitly and are usually far lower.
 MAX_USD_CEILING = Decimal('1.00')
 MAX_SEARCH_CEILING = 50
 VALIDATION_MODEL = 'gpt-4.1-mini'
@@ -120,7 +120,7 @@ def open_allowance(name, fingerprint, max_usd, max_searches, results=RESULTS):
         opened_with = budget.metadata.get('code_fingerprint')
         if opened_with != fingerprint:
             raise RuntimeError(f'Allowance {name!r} was opened for different code. It will not be reused; '
-                               'ask for a new approval and pass a new --allowance name.')
+                               'open a new one with a new --allowance name.')
     else:
         budget.metadata = {'name': name, 'code_fingerprint': fingerprint,
                            'opened_at': datetime.now(timezone.utc).isoformat(),
@@ -171,7 +171,7 @@ def create_app(allowance, max_usd, max_searches):
     code = snapshot.capture(RESULTS)
     budget = open_allowance(allowance, code['fingerprint'], max_usd, max_searches)
     if budget.stopped:
-        raise RuntimeError(f'Allowance {allowance!r} is stopped. Ask for a new approval and use a new name.')
+        raise RuntimeError(f'Allowance {allowance!r} is stopped. Open a new one with a new name.')
     os.environ['ENABLE_LIVE_RESEARCH'] = 'true'  # process only; .env stays unchanged
     active = {'trace': None}
     main.Providers = lambda: AuditProvider(budget, active['trace'])
@@ -218,16 +218,16 @@ def create_app(allowance, max_usd, max_searches):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--allow-paid', action='store_true', help='Start the paid validation server.')
-    parser.add_argument('--allowance', help='Name of a newly approved allowance, or one being resumed for identical code.')
-    parser.add_argument('--max-usd', type=Decimal, help='Approved model spending cap for this allowance.')
-    parser.add_argument('--max-searches', type=int, help='Approved Tavily search cap for this allowance.')
+    parser.add_argument('--allowance', help='Name of a new allowance, or one being resumed for identical code.')
+    parser.add_argument('--max-usd', type=Decimal, help='Model spending cap for this allowance.')
+    parser.add_argument('--max-searches', type=int, help='Tavily search cap for this allowance.')
     args = parser.parse_args(argv)
     if not args.allow_paid:
         print(json.dumps(prepare(), indent=2))
         print('Offline preparation only; no network or paid calls were made.')
         return
     if not args.allowance or args.max_usd is None or args.max_searches is None:
-        parser.error('--allow-paid requires --allowance, --max-usd and --max-searches from an explicit approval.')
+        parser.error('--allow-paid requires --allowance, --max-usd and --max-searches.')
     import uvicorn
     uvicorn.run(create_app(args.allowance, args.max_usd, args.max_searches), host='127.0.0.1', port=8765)
 

@@ -19,7 +19,7 @@ const citation = (id, stance, statement, url) => ({
 export function report(overrides = {}, claimOverrides = {}) {
   return {
     id: '11111111-1111-4111-8111-111111111111', mode: 'live', submitted_text: 'The fictional tower is 300 metres tall.',
-    created_at: '2026-09-30T12:00:00+00:00', intent: 'FACTUAL', note: '', limitations: ['Local MVP limitation.'],
+    created_at: '2026-09-30T12:00:00+00:00', intent: 'FACTUAL', note: '', limitations: ['Example limitation.'],
     usage: { model_calls: 6, search_calls: 2, input_tokens: 1, output_tokens: 1 }, omitted_claims: false,
     input_spans: [], coverage_status: 'passed', input_type: 'text', source_url: null, source_sha256: null,
     claims: [{

@@ -41,16 +41,16 @@ docker run -d --name reel-fact-checker -p 8000:8000 \
 Set by the image, normally unchanged: `ENVIRONMENT=production`, `DATA_DIR=/data`, `FRONTEND_DIST=/app/frontend`,
 `COOKIE_SECURE=true`, `PORT=8000`.
 
-## Railway (chosen host)
+## Railway
 
 1. railway.com → New Project → Deploy from GitHub repo → `blessy-kambham/reel-fact-checker`, branch `main`. Railway finds the `Dockerfile`.
-2. Service → Settings → Networking → Generate Domain (HTTPS is automatic).
+2. Service → Settings → Networking → Generate Domain (HTTPS is automatic). When asked for the port, use the one in the deploy log line `Uvicorn running on http://0.0.0.0:<port>`; Railway sets it to 8080.
 3. Right-click the service → Attach Volume, mount path `/data` (1 GB is plenty without video).
 4. Service → Variables: the required settings from the table above, plus
    - `RAILWAY_RUN_UID=0` (Railway volumes are root-owned; without it saving reports fails),
    - `TRUST_PROXY_HEADERS=true` (Railway's proxy sets `X-Forwarded-For`),
    - optional `WITH_VIDEO=true` to build with video (needs about 2 GB memory; roughly doubles cost).
-5. Deploy, open the domain, sign in with `APP_PASSWORD`, and open `/config` in your own browser: it should show `live_ready: true`. `setting_states` lists each setting as set, empty or absent (names only) and `started_at` shows when the running copy started, so you can tell whether a new deployment is live. Add variables on the service's own Variables tab; project-level Shared Variables do nothing until attached to the service.
+5. Deploy, open the domain, sign in with `APP_PASSWORD`, and open `/config`: it should show `live_ready: true`. `setting_states` lists each setting as set, empty or absent (names only) and `started_at` shows when the running copy started, so you can tell whether a new deployment is live. Add variables on the service's own Variables tab; project-level Shared Variables do nothing until attached to the service.
 6. Set a usage limit under Workspace → Usage, and spending limits in the OpenAI and Tavily accounts.
 
 ## HTTPS

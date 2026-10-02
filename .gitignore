@@ -19,8 +19,6 @@ htmlcov/
 coverage/
 *.log
 *.tsbuildinfo
-/report-preview.png
-/stage1-browser.png
 # Local credentials
 *.pem
 *.key
