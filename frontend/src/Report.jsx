@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 
 function Evidence({ item, demo, cited }) {
-  return <article className="evidence">
+  return <article className={`evidence evidence-${item.stance === 'FOR' ? 'for' : item.stance === 'AGAINST' ? 'against' : 'context'}`}>
     <span className="evidence-label">{item.evidence_id ? `${item.evidence_id} · ` : ''}{item.stance === 'FOR' ? 'Supporting evidence' : item.stance === 'AGAINST' ? 'Contradicting evidence' : 'Context'}</span>
     {cited && <span className="verdict-basis">Used for verdict</span>}
     <p>{item.statement}</p>
     <blockquote>{item.quote}</blockquote>
-    {item.url?.startsWith('https://') ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title} ↗</a> : <strong>{item.title}</strong>}
+    {item.url?.startsWith('https://') ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a> : <strong>{item.title}</strong>}
     <p className="verification">{demo ? 'Demo fixture' : item.verified ? 'Quote and attribution checked' : 'Unverified'} · {item.verification}</p>
     {item.retrieval === 'search_copy' && <p className="verification">Page text from the search provider's copy (the site refused a direct fetch).</p>}
   </article>;
@@ -44,7 +44,7 @@ export default function Report({ report }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <section ref={reportElement} className="report" aria-label="Fact-check report">
-    <div className="card-heading"><p className="eyebrow">{report.mode === 'demo' ? 'FICTIONAL DEMO REPORT' : 'RESEARCH REPORT'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button></div></div>
+    <div className="card-heading"><p className="report-kind">{report.mode === 'demo' ? 'Fictional demo report' : 'Research report'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button></div></div>
     <h2>{report.mode === 'demo' ? 'See how evidence changes the story.' : 'Your claim-by-claim report'}</h2>
     {report.input_type === 'article' && <p className="report-meta">Article: {report.source_url?.startsWith('https://') ? <a href={report.source_url} target="_blank" rel="noopener noreferrer">{report.source_url}</a> : report.source_url}</p>}
     {report.input_type === 'article' && report.coverage_status === 'incomplete' && <p className="notice" role="alert">Some selected claims were not copied word for word from the article, so they were not researched.</p>}
@@ -57,9 +57,9 @@ export default function Report({ report }) {
     <p className="report-meta">{new Date(report.created_at).toLocaleString()} · {report.claims.length} claims · {report.usage.search_calls} searches · {report.usage.model_calls} model calls</p>
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}
     {report.claims.map((claim, index) => <article className="claim-result" key={index}>
-      <p className="eyebrow">CLAIM {index + 1} · {claim.status.toUpperCase()}</p>
+      <p className="claim-number">Claim {index + 1} ({claim.status})</p>
       <h3>{claim.claim}</h3>
-      <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'EXAMPLE: ' : ''}{claim.verdict}</span>
+      <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'Example: ' : ''}{claim.verdict}</span>
       {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
       {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
       <p className="report-meta">{claim.sources_checked} pages retrieved · Confidence is not calibrated</p>
@@ -90,7 +90,7 @@ export default function Report({ report }) {
           <details><summary>Inspect the unverified proposal</summary>
             <p><strong>Unverified statement:</strong> {item.statement}</p>
             <blockquote>{item.quote}</blockquote>
-            {item.url?.startsWith('https://') && <a href={item.url} target="_blank" rel="noopener noreferrer">Inspect source ↗</a>}
+            {item.url?.startsWith('https://') && <a href={item.url} target="_blank" rel="noopener noreferrer">Inspect source</a>}
             {item.retrieved_at && <p className="verification">Retrieved: {new Date(item.retrieved_at).toLocaleString()}</p>}
           </details>
         </article>)}

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Report from './Report';
 import History from './History';
+import '@fontsource-variable/fraunces/full.css';
+import '@fontsource-variable/figtree';
 import './style.css';
 
 // Unset: local development API. Empty string (production build): same origin as the page.
@@ -87,15 +89,18 @@ function App() {
     } finally { setLoading(false); if (!demo) refreshSpending(); }
   }
   return <main>
-    <header><a href="/" className="brand"><span className="mark">r.</span> reel fact-checker</a><span className="badge">{config?.live_ready ? 'LIVE RESEARCH ENABLED' : 'FREE LOCAL DEMO'}</span></header>
-    <section className="intro"><p className="eyebrow">FROM CLAIMS TO CLARITY</p><h1>Pause the scroll.<br /><span>Question the claim.</span></h1><p className="lead">Follow the evidence, compare the context,<br />and see what still needs an answer.</p></section>
+    <header><a href="/" className="brand"><span className="mark">r.</span> reel fact-checker</a><span className={`badge${config?.live_ready ? ' is-live' : ''}`}>{config?.live_ready ? 'Live research on' : 'Free local demo'}</span></header>
+    <section className="intro">
+      <div><h1>Pause the scroll.<br />Question the claim.</h1><p className="lead">Paste a claim, an article link or a Reel. Get a verdict with the evidence behind it.</p></div>
+      <div className="stickers" aria-hidden="true"><span className="sticker sticker-true">True</span><span className="sticker sticker-misleading">Misleading</span><span className="sticker sticker-false">False</span></div>
+    </section>
     <section className="card">
-      <div className="card-heading"><h2>Check a claim</h2><span className="step">TEXT → EVIDENCE → REPORT</span></div>
-      {!config?.live_ready && <aside className="setup-note"><strong>Start here. No accounts needed.</strong><p>Try a fictional example to explore the report. Real research stays off until you configure API access.</p><button className="demo-button" disabled={loading} onClick={() => run(true)}>Explore the free demo <span aria-hidden="true">↗</span></button></aside>}
+      <div className="card-heading"><h2>Check a claim</h2></div>
+      {!config?.live_ready && <aside className="setup-note"><strong>Start here. No accounts needed.</strong><p>Try a fictional example to explore the report. Real research stays off until you configure API access.</p><button className="demo-button" disabled={loading} onClick={() => run(true)}>Explore the free demo</button></aside>}
       {locked && <form className="sign-in" onSubmit={signIn}>
         <label htmlFor="app-password">This site is private. Enter the access password to use live research.</label>
         <input id="app-password" type="password" autoComplete="current-password" value={passwordInput} maxLength={200} required disabled={signingIn} onChange={event => setPasswordInput(event.target.value)} />
-        <button type="submit" disabled={signingIn || !passwordInput}>{signingIn ? 'Signing in…' : 'Sign in'} <span aria-hidden="true">↗</span></button>
+        <button type="submit" disabled={signingIn || !passwordInput}>{signingIn ? 'Signing in…' : 'Sign in'}</button>
       </form>}
       {config?.auth?.required && config?.auth?.signed_in && <p className="report-meta">Signed in. <button type="button" className="link-button" onClick={signOut}>Sign out</button></p>}
       {!locked && <>
@@ -121,7 +126,7 @@ function App() {
           <input id="article-url" type="url" value={articleUrl} maxLength={2000} required disabled={loading} placeholder="https://…" aria-describedby="article-help" onChange={event => setArticleUrl(event.target.value)} />
           <div className="input-meta" id="article-help"><span>Public https:// news or blog page · Up to 3 central claims are checked</span></div>
         </>}
-        <button disabled={loading || !(inputType === 'text' ? claim.trim() : inputType === 'video' ? videoFile && config?.video_ready : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'} <span aria-hidden="true">↗</span></button>
+        <button disabled={loading || !(inputType === 'text' ? claim.trim() : inputType === 'video' ? videoFile && config?.video_ready : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'}</button>
       </form>
       {config?.live_ready && <p className="notice">Research sends text to OpenAI and queries to Tavily and may incur provider charges. Reports are experimental; inspect the evidence before relying on a verdict.</p>}
       {config?.live_ready && config?.spending && <p className="report-meta">Today (UTC): about ${config.spending.spent_usd.toFixed(3)} of ${config.spending.limit_usd.toFixed(2)} estimated OpenAI cost · {config.spending.searches} of {config.spending.search_limit} searches{config.spending.stopped ? ' · daily limit reached' : ''}</p>}
