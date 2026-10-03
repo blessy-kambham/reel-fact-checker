@@ -9,18 +9,55 @@ two steps:
    background for this exact claim. This step does not see the analyst's own proposed verdict, and
    passages about a neighbouring claim are excluded as irrelevant.
 
+`build_case` runs both steps for a set of pages. It also lets the analyst review its own work: when the
+relation check sets selections aside and little direct evidence is left, the analyst is shown what was
+set aside and why, and chooses a tool: `select_evidence` to pick replacements, or `finish`.
+Replacements go through the same relation check.
+
 Used by: `agents/orchestrator.py`.
 """
 import asyncio
 import hashlib
 import json
 
-from schemas import Analysis, Citation, EvidenceDraft, EvidenceRelation
+from schemas import Analysis, AnalystAction, Citation, EvidenceDraft, EvidenceRelation
 from services.budget import BudgetExceeded
 from services.excerpts import source_excerpts
 from services.providers import ProviderFailure
 
+from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
+
 RELATION_TO_STANCE = {'SUPPORTS': 'FOR', 'CONTRADICTS': 'AGAINST', 'BACKGROUND': 'CONTEXT'}
+# Selections the relation check or the application set aside as not usable for this claim.
+SET_ASIDE_CODES = frozenset({'relation_unresolved', 'unknown_source', 'unknown_excerpt'})
+MAX_REPLACEMENTS = 3
+# The analyst reviews its selections only when this few direct (FOR or AGAINST) passages are left.
+REVIEW_WHEN_DIRECT_AT_MOST = 1
+
+TOOLS = {
+    'select_evidence': f'Add up to {MAX_REPLACEMENTS} excerpts not selected before that directly support or contradict the claim.',
+    'finish': 'Add nothing: no other supplied excerpt bears directly on the claim.',
+}
+
+PROPOSE_INSTRUCTIONS = (
+    'Analyze only the supplied pages for the claim. Compare FOR and AGAINST evidence. Use UNVERIFIABLE when evidence is '
+    'insufficient, unclear, stale, or not directly relevant. Prefer primary evidence; evaluate author authority, methodology, publication date, and editorial standards. Do not treat multiple copied articles as independent sources. Distinguish correlation from causation, dates and scope. '
+    'For every explanatory factual statement select one supplied source_id and excerpt_id. '
+    'Do not write quotes: the application copies the selected excerpt directly. '
+    'Read surrounding excerpts for context. If no excerpt supports the statement, omit the statement. '
+    'FOR means evidence supporting the ORIGINAL CLAIM, not supporting your proposed verdict. '
+    'AGAINST means evidence contradicting the ORIGINAL CLAIM, including evidence supporting a FALSE verdict. '
+    'For example, for the claim that a fictional lamp needs no power, an excerpt saying it runs on batteries is AGAINST, even when your verdict is FALSE. '
+    'Select only excerpts about this claim itself. The context may contain other assertions; never select evidence about them. '
+    'Do not copy the search direction into stance; search queries can retrieve either kind of evidence. '
+    'Use CONTEXT only when the excerpt neither supports nor contradicts the original claim. '
+    'Never invent IDs or URLs. Limitations must describe research limitations only, not uncited factual assertions. '
+    'Do not assign confidence percentages. Do not mistake the absence of contradictory evidence for proof.')
+REVIEW_INSTRUCTIONS = PROPOSE_INSTRUCTIONS + (
+    ' You already selected passages for this claim. A separate check set some of them aside because they do not '
+    'bear directly on this exact claim: "set_aside" lists them with the reason, and "kept" lists the ones that remain. '
+    'Choose exactly ONE tool from "tools". Never reselect an excerpt listed in kept or set_aside, and do not select '
+    'an excerpt that has the same problem as one that was set aside.')
 
 
 def _fingerprint(source) -> str:
@@ -33,31 +70,80 @@ class AnalystAgent:
     def __init__(self, provider):
         self.provider = provider
 
-    async def propose(self, claim, sources: dict):
-        """Select evidence for and against the claim. Returns (analysis, excerpts by ID)."""
-        excerpts = {excerpt.id: excerpt for source in sources.values() for excerpt in source_excerpts(source)}
-        source_inputs = []
+    @staticmethod
+    def _inputs(sources: dict, excerpts: dict) -> list:
+        """The pages as the analyst sees them: numbered excerpts, never the raw page."""
+        inputs = []
         for source in sources.values():
             item = source.model_dump(exclude={'text'})
             item['excerpts'] = [dict(id=e.id, start=e.start, end=e.end, text=e.text)
                                 for e in excerpts.values() if e.source_id == source.id]
-            source_inputs.append(item)
-        analysis = await self.provider.structured(Analysis,
-            'Analyze only the supplied pages for the claim. Compare FOR and AGAINST evidence. Use UNVERIFIABLE when evidence is '
-            'insufficient, unclear, stale, or not directly relevant. Prefer primary evidence; evaluate author authority, methodology, publication date, and editorial standards. Do not treat multiple copied articles as independent sources. Distinguish correlation from causation, dates and scope. '
-            'For every explanatory factual statement select one supplied source_id and excerpt_id. '
-            'Do not write quotes: the application copies the selected excerpt directly. '
-            'Read surrounding excerpts for context. If no excerpt supports the statement, omit the statement. '
-            'FOR means evidence supporting the ORIGINAL CLAIM, not supporting your proposed verdict. '
-            'AGAINST means evidence contradicting the ORIGINAL CLAIM, including evidence supporting a FALSE verdict. '
-            'For example, for the claim that a fictional lamp needs no power, an excerpt saying it runs on batteries is AGAINST, even when your verdict is FALSE. '
-            'Select only excerpts about this claim itself. The context may contain other assertions; never select evidence about them. '
-            'Do not copy the search direction into stance; search queries can retrieve either kind of evidence. '
-            'Use CONTEXT only when the excerpt neither supports nor contradicts the original claim. '
-            'Never invent IDs or URLs. Limitations must describe research limitations only, not uncited factual assertions. '
-            'Do not assign confidence percentages. Do not mistake the absence of contradictory evidence for proof.',
-            json.dumps({'claim': claim.model_dump(), 'sources': source_inputs}))
+            inputs.append(item)
+        return inputs
+
+    async def propose(self, claim, sources: dict):
+        """Select evidence for and against the claim. Returns (analysis, excerpts by ID)."""
+        excerpts = {excerpt.id: excerpt for source in sources.values() for excerpt in source_excerpts(source)}
+        analysis = await self.provider.structured(Analysis, PROPOSE_INSTRUCTIONS,
+            json.dumps({'claim': claim.model_dump(), 'sources': self._inputs(sources, excerpts)}))
         return analysis, excerpts
+
+    async def build_case(self, claim, sources: dict, all_sources: dict | None = None, limit: int = 6, steps=None,
+                         review: bool = True):
+        """Select passages from `sources` and relate each one to the claim.
+
+        Returns the selections in the order they were made. Each entry is either a (draft, metadata) pair
+        ready for the citation verifier, or an unverified Citation for a selection that cannot be used.
+        `all_sources` is every page gathered for the claim, used to explain a selection that points
+        outside `sources`. With `review`, the analyst may replace selections that were set aside.
+        """
+        steps = steps if steps is not None else []
+        lookup = all_sources or sources
+        analysis, excerpts = await self.propose(claim, sources)
+        entries, chosen = [], set()
+
+        async def relate(selections):
+            for selection in selections:
+                chosen.add(selection.excerpt_id)
+                refused, draft, metadata = await self.classify(selection, lookup, excerpts, claim.text)
+                entries.append(refused if refused is not None else (draft, metadata))
+
+        await relate(analysis.evidence[:limit])
+        if not autonomous(self.provider, 'analyst'):
+            return entries
+        set_aside = [e for e in entries if isinstance(e, Citation) and e.verification_code in SET_ASIDE_CODES]
+        direct = [e for e in entries if not isinstance(e, Citation) and e[0].stance in ('FOR', 'AGAINST')]
+        steps.append(f'Selected {len(entries)} passage(s) from {len(sources)} page(s)'
+                     + (f'; the relation check set {len(set_aside)} aside.' if set_aside else '.'))
+        if not review or not set_aside or len(direct) > REVIEW_WHEN_DIRECT_AT_MOST:
+            return entries
+
+        # Review: the analyst sees what was set aside and decides whether to pick replacements.
+        async def select_evidence(action):
+            fresh = []
+            for selection in action.evidence:
+                if selection.excerpt_id not in chosen and selection.excerpt_id not in {s.excerpt_id for s in fresh}:
+                    fresh.append(selection)
+            fresh, before = fresh[:MAX_REPLACEMENTS], len(entries)
+            await relate(fresh)
+            passed = sum(not isinstance(e, Citation) for e in entries[before:])
+            steps.append(f'Reviewed its selections and chose {len(fresh)} replacement(s); {passed} passed the relation check.')
+            return Done()
+
+        async def finish(action):
+            steps.append('Reviewed its selections and found no other passage that bears directly on the claim.')
+            return Done()
+
+        state = {'claim': claim.model_dump(), 'tools': TOOLS,
+                 'kept': [{'excerpt_id': e[1]['excerpt_id'], 'stance': e[0].stance} for e in entries if not isinstance(e, Citation)],
+                 'set_aside': [{'excerpt_id': c.excerpt_id, 'why': c.relation_reason or c.verification} for c in set_aside],
+                 'sources': self._inputs(sources, excerpts)}
+        try:
+            await run_tools(self.provider, AnalystAction, REVIEW_INSTRUCTIONS, lambda steps_left, last_step: state,
+                            {'select_evidence': select_evidence, 'finish': finish}, max_steps=1)
+        except PlanningUnavailable:
+            pass  # The first selection stands.
+        return entries
 
     async def classify(self, selection, sources: dict, excerpts: dict, claim_text: str):
         """Relate one selected passage to the claim.

@@ -15,28 +15,31 @@ I built this as a portfolio project to explore a question I care about: how do y
 
 ## How it works
 
-The pipeline is a set of single-purpose agents run in a fixed order by an orchestrator. Each agent has one job and sees only what it needs.
+The work is done by a team of agents. Each agent is a model with its own tools: on every step it chooses a tool, the application runs it, and the agent sees the result before choosing again. An orchestrator agent decides which agent works on a claim next.
 
 ```text
 video ──▶ Content Extractor ─┐
 article ─────────────────────┼─▶ Claim Extractor ─▶ for each claim, two at a time:
 statement ───────────────────┘
-                                   Research Agent ─▶ Analyst Agent ─▶ Citation Verifier ─▶ Verdict Agent
-                                                                                                │
-                                                                    report, saved to history ◀──┘
+                                   Orchestrator chooses the next agent
+                                        │
+                                        ▼
+                                   Research Agent ─▶ Analyst Agent ─▶ Citation Verifier ─▶ Verdict Agent ─▶ report
+                                        ▲                                                     │
+                                        └────────── second round, when evidence is thin ◀─────┘
 ```
 
-| Agent | Job |
-| --- | --- |
-| [Orchestrator](backend/agents/orchestrator.py) | Runs the agents in order, runs claims in parallel and decides when a verdict must be withheld. Plain code, not a model. |
-| [Content Extractor](backend/agents/content_extractor.py) | Turns a video into text: speech (Whisper), on-screen text (keyframes) and caption. |
-| [Claim Extractor](backend/agents/claim_extractor.py) | Classifies the content and extracts up to three claims, copied word for word. |
-| [Research Agent](backend/agents/research_agent.py) | One per claim. Autonomous: it writes its own search queries, chooses which results to read and decides when it has enough, using tools in a loop. |
-| [Analyst Agent](backend/agents/analyst_agent.py) | Selects passages for and against the claim by ID and classifies how each relates to it. |
-| [Citation Verifier](backend/agents/citation_verifier.py) | Confirms each quote exists in the page and says what it is cited for. |
-| [Verdict Agent](backend/agents/verdict_agent.py) | Gives the verdict from verified evidence only, citing evidence IDs. |
+| Agent | Job | Tools it chooses between |
+| --- | --- | --- |
+| [Orchestrator](backend/agents/orchestrator.py) | Directs the work on each claim and can send it back for more research. | The other agents, and `finish` |
+| [Content Extractor](backend/agents/content_extractor.py) | Turns a video into text: speech (Whisper), on-screen text (keyframes) and caption. | `read_more_frames`, `finish` |
+| [Claim Extractor](backend/agents/claim_extractor.py) | Classifies the content and extracts up to three claims, copied word for word. | `revise`, `keep` |
+| [Research Agent](backend/agents/research_agent.py) | One per claim. Writes its own search queries and chooses which results to read. | `search_web`, `read_pages`, `finish` |
+| [Analyst Agent](backend/agents/analyst_agent.py) | Selects passages for and against the claim by ID and relates each one to it. | `select_evidence`, `finish` |
+| [Citation Verifier](backend/agents/citation_verifier.py) | Confirms each quote exists in the page and says what it is cited for. | `accept`, `reject`, `read_full_page` |
+| [Verdict Agent](backend/agents/verdict_agent.py) | Gives the verdict from verified evidence only, citing evidence IDs. | `issue_verdict`, `request_evidence` |
 
-The orchestrator fixes the order of the agents, so none can skip a check or issue a verdict without evidence. Within that order the Research Agent plans its own work: each step it picks a tool (search, read pages or finish), sees the result and decides what to do next, inside a budget the application enforces. Each report lists the steps it took. [`backend/agents/README.md`](backend/agents/README.md) shows where each agent is used and how the loop works.
+The agents decide how to do the work; the application enforces the rules they work inside. No route the orchestrator picks can skip a stage, a verdict needs verified evidence, and every loop has a budget. Each report lists the steps the agents chose. [`backend/agents/README.md`](backend/agents/README.md) explains the loop, how the agents hand work to each other, and what the application enforces.
 
 ## Design decisions
 
@@ -46,7 +49,7 @@ These are the choices that shaped the project, most of them made after a live te
 - **Stance is decided separately from selection.** The analyst's first pass sometimes labelled contradicting evidence as supporting. A separate call now classifies each passage against the specific claim without seeing the proposed verdict, and passages about a neighbouring claim are excluded as irrelevant.
 - **The verdict is isolated.** The Verdict Agent receives only the claim and the verified evidence. In a compound sentence this stops one claim's verdict drifting toward the other's.
 - **Claims must be verbatim.** Extracted claims are checked against the original text, so the model cannot quietly drop, soften or rewrite an assertion. Minor differences in quotes, apostrophes and dashes are tolerated.
-- **Autonomy where it helps, rules where it matters.** Research is open-ended, so the Research Agent plans it. Verification is not, so it stays fixed. The agent can choose its searches, but it cannot finish without looking for contradicting evidence, read anything a search did not return, or exceed its budget.
+- **Agents choose, the application enforces.** A model only ever picks a tool; the application runs it. So the research agent can plan its searches but cannot finish without looking for contradicting evidence or read a page no search returned; the orchestrator can reroute a claim but cannot skip verification; and the verdict agent can ask for more evidence but cannot change its verdict to get past a refused citation.
 - **Withhold rather than guess.** Each claim reports whether its verdict was issued or withheld, with a specific reason such as `no_sources`, `citation_failed` or `conflicting_evidence`. A verdict resting on a single page is flagged.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
 - **Blocked pages fall back transparently.** When a site refuses the app's fetcher, the search provider's extracted text for that page is used instead, and the report labels that evidence.
@@ -73,8 +76,9 @@ These are the choices that shaped the project, most of them made after a live te
 backend/
   main.py                API routes, access control, limits, static serving
   schemas.py             Pydantic contracts shared by the API and the model
-  agents/                one file per agent, plus the orchestrator that runs them
-    orchestrator.py      order of the steps, parallel research, withholding rules
+  agents/                one file per agent
+    runtime.py           the tool loop every agent runs
+    orchestrator.py      chooses the next agent; shared state; withholding rules
     content_extractor.py claim_extractor.py research_agent.py
     analyst_agent.py     citation_verifier.py verdict_agent.py
   services/
@@ -129,7 +133,7 @@ Live research needs an OpenAI API key and a Tavily key, and it costs money (a ch
 | `DAILY_BUDGET_USD`, `DAILY_SEARCH_LIMIT` | Daily caps; defaults are 0.50 and 40 |
 | `APP_PASSWORD`, `SESSION_SECRET` | Password sign-in; required in production |
 | `REPORTS_PER_HOUR` | Per-person limit; default 10 |
-| `RESEARCH_AGENT_MODE` | `autonomous` (default) or `fixed` for one supporting and one contradicting search |
+| `AGENT_MODE` | `autonomous` (default): every agent plans its own steps. `fixed`: each agent does one standard pass. Or a list of agent names, such as `research,verdict` |
 | `WHISPER_MODEL` | Whisper size for video; default `small` |
 
 Never commit `.env` files or keys.
@@ -163,13 +167,13 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 295 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 368 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
 npx playwright install chromium && npm run test:e2e   # 15 browser tests, mocked backend
 ```
 
-The backend tests use scripted providers, so they run offline and cost nothing. They cover input validation, claim mapping, citation checks, verdict gating, spending limits, history, access control, article and video ingestion, and the safe fetcher. The policy cases pin down how the pipeline must behave in specific situations, such as invented source IDs, misattributed quotes, search outages and conflicting evidence. GitHub Actions runs the backend tests, the policy cases and the frontend build on every push.
+The backend tests use scripted providers, so they run offline and cost nothing. They cover input validation, claim mapping, citation checks, verdict gating, spending limits, history, access control, article and video ingestion, the safe fetcher, and each agent's choices together with the limits on them. The policy cases pin down how the pipeline must behave in specific situations, such as invented source IDs, misattributed quotes, search outages and conflicting evidence. GitHub Actions runs the backend tests, the policy cases and the frontend build on every push.
 
 Passing tests show that the pipeline follows its rules. They do not measure factual accuracy; see below.
 

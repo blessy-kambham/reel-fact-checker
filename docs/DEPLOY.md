@@ -35,7 +35,7 @@ docker run -d --name reel-fact-checker -p 8000:8000 \
 | `SESSION_SECRET` | yes | Random value of 32+ characters, e.g. `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`. Changing it signs everyone out. |
 | `DAILY_BUDGET_USD`, `DAILY_SEARCH_LIMIT` | no | Daily caps (defaults 0.50 and 40). |
 | `REPORTS_PER_HOUR` | no | Per-person report limit (default 10). |
-| `RESEARCH_AGENT_MODE` | no | `fixed` turns off the research agent's own planning (default `autonomous`). |
+| `AGENT_MODE` | no | `autonomous` (default) lets every agent plan its own steps. `fixed` makes each agent do one standard pass, which uses fewer model calls. A list such as `research,verdict` turns planning on for those agents only. |
 | `TRUST_PROXY_HEADERS` | behind a proxy | `true` only when a trusted reverse proxy sets `X-Forwarded-For`; otherwise every visitor shares the proxy's address. |
 | `WHISPER_MODEL` | video only | Whisper size (default `small`); downloads once into `/data/models`. |
 

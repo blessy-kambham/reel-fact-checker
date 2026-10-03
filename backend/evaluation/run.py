@@ -24,6 +24,7 @@ class FixtureProvider:
     def __init__(self, case):
         self.case = case
         self.search_calls = 0
+        self.relations = 0
         self.judgments = 0
 
     async def search(self, query):
@@ -38,7 +39,8 @@ class FixtureProvider:
         if schema is VerdictDecision:
             return VerdictDecision(verdict=self.case['candidate']['verdict'], evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
         if schema is EvidenceRelation:
-            item = self.case['candidate']['evidence'][self.judgments]
+            item = self.case['candidate']['evidence'][self.relations]
+            self.relations += 1
             return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item['stance']], reason='Scripted relation')
         if schema is CitationJudgment:
             self.judgments += 1

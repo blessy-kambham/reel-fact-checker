@@ -155,9 +155,11 @@ def prepare(results=RESULTS, root=snapshot.ROOT):
             'missing_settings': main.missing_settings(),
             'model_supported': model == VALIDATION_MODEL,
             'allowances': allowance_status(results),
-            'calls_per_claim': 'Per claim: at most 5 searches and 24 model calls (up to 10 research-agent steps, '
-                               '1 analysis, 2 per selected citation for relation and attribution with up to 6 '
-                               'citations, 1 verdict). Per report: 1-2 more model calls for extraction and coverage.'}
+            'calls_per_claim': 'Per claim: at most 5 searches. Model calls depend on what the agents choose: about 20 '
+                               'on the usual route (orchestrator 4, research agent 5-7, analysis 1, two per selected '
+                               'passage for relation and attribution, verdict 1), and at most 65 when a second '
+                               'research round, full-page reads and retries are all used. Per report: 1-4 more for '
+                               'extraction, coverage and one revision; a video adds up to 3.'}
 
 
 def create_app(allowance, max_usd, max_searches):

@@ -12,7 +12,7 @@ class Provider:
     def __init__(self, evidence, attribution=True, stance=True):
         self.evidence = evidence
         self.attribution, self.stance = attribution, stance
-        self.checks = []
+        self.checks, self.relations = [], 0
     async def search(self, query):
         return [{'url':'https://example.org/fixture','title':'Synthetic fixture'}]
     async def structured(self, schema, instructions, data):
@@ -21,7 +21,8 @@ class Provider:
         if schema is VerdictDecision:
             return VerdictDecision(verdict='TRUE', evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
         if schema is EvidenceRelation:
-            item = self.evidence[len(self.checks)]
+            item = self.evidence[self.relations]
+            self.relations += 1
             return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item.stance], reason='Scripted relation')
         assert schema is CitationJudgment
         self.checks.append(json.loads(data))

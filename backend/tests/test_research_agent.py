@@ -4,7 +4,7 @@ import json
 import pytest
 from agents import research_agent
 from agents.orchestrator import research_all, research_claim
-from agents.research_agent import MAX_SEARCHES, MAX_STEPS, ResearchAgent
+from agents.research_agent import MAX_SEARCHES, MAX_STEPS
 from schemas import ResearchAction
 from services.budget import BudgetExceeded
 from services.providers import ProviderFailure, Providers
@@ -25,7 +25,7 @@ def finish(reason='Both sides are covered.'):
 
 class Planner(FakeProvider):
     """A provider whose model plans research with a scripted sequence of tool choices."""
-    autonomous_research = True
+    agent_mode = 'research'
 
     def __init__(self, actions, results_per_search=1, **kwargs):
         super().__init__(**kwargs)
@@ -58,6 +58,11 @@ def run(provider, fetch=None):
     return asyncio.run(research_claim(CLAIM, provider, fetch or fetcher()))
 
 
+def steps(result):
+    """The research agent's lines from the claim's step list."""
+    return [line.removeprefix('Research Agent: ') for line in result.agent_steps if line.startswith('Research Agent: ')]
+
+
 def test_the_agent_writes_its_own_queries_and_chooses_what_to_read():
     provider = Planner([search('sensor reading 12 units test report'), read('R1'),
                         search('sensor reading disputed', 'contradicting'), read('R2'), finish()])
@@ -67,7 +72,7 @@ def test_the_agent_writes_its_own_queries_and_chooses_what_to_read():
     assert fetch.fetched == ['https://example.org/page-1-0', 'https://example.org/page-2-0']
     assert result.verdict == 'TRUE' and result.sources_checked == 2
     assert result.supporting_search == result.contradicting_search == research_agent.RETRIEVED
-    assert result.research_steps == [
+    assert steps(result) == [
         'Searched for supporting evidence: "sensor reading 12 units test report" (1 new result(s)).',
         'Read 1 result(s) (R1); 1 kept as evidence.',
         'Searched for contradicting evidence: "sensor reading disputed" (1 new result(s)).',
@@ -95,7 +100,7 @@ def test_finishing_is_refused_until_contradicting_evidence_has_been_searched_for
     result = run(provider)
     assert 'finish refused: search for contradicting evidence first.' in [s['last_step'] for s in provider.states]
     assert provider.queries == ['supporting query', 'contradicting query']
-    assert result.research_steps[-1] == 'Finished: Now both.'
+    assert steps(result)[-1] == 'Finished: Now both.'
 
 
 def test_a_direction_the_agent_never_searches_is_searched_for_it():
@@ -104,8 +109,8 @@ def test_a_direction_the_agent_never_searches_is_searched_for_it():
     assert provider.queries[0] == 'only supporting'
     assert len(provider.queries) == 2 and provider.queries[1].endswith('contradicting evidence limitations fact check')
     assert result.contradicting_search == research_agent.RETRIEVED and result.sources_checked == 2
-    assert 'Stopped: the step budget for this claim was spent.' in result.research_steps
-    assert any('standard search for contradicting evidence' in step for step in result.research_steps)
+    assert 'Stopped: the step budget for this claim was spent.' in steps(result)
+    assert any('standard search for contradicting evidence' in step for step in steps(result))
 
 
 def test_unread_results_are_read_when_the_agent_reads_nothing():
@@ -158,7 +163,7 @@ def test_planning_failure_falls_back_to_the_fixed_plan():
     provider = Broken([])
     result = run(provider)
     assert len(provider.queries) == 2 and 'primary sources' in provider.queries[0] and 'contradicting' in provider.queries[1]
-    assert result.verdict == 'TRUE' and result.research_steps == []
+    assert result.verdict == 'TRUE' and steps(result) == []
     assert any('could not plan a step' in text for text in result.limitations)
 
 
@@ -171,7 +176,7 @@ def test_a_failed_search_withholds_the_verdict_as_before():
             return await super().search(query)
     result = run(Flaky([search('supporting'), read('R1'), search('contradicting angle', 'contradicting'), finish()]))
     assert result.withheld_reason == 'search_failed' and result.contradicting_search == 'Failed'
-    assert 'Search for contradicting evidence failed: "contradicting angle".' in result.research_steps
+    assert 'Search for contradicting evidence failed: "contradicting angle".' in steps(result)
 
 
 def test_spending_limit_during_planning_stops_the_claim():
@@ -187,15 +192,19 @@ def test_spending_limit_during_planning_stops_the_claim():
 def test_providers_without_planning_use_the_fixed_plan():
     provider = FakeProvider()
     result = run(provider)
-    assert len(provider.queries) == 2 and result.research_steps == []
+    assert len(provider.queries) == 2 and steps(result) == []
 
 
 def test_fixed_mode_can_be_selected_by_setting(monkeypatch):
-    mode = Providers.autonomous_research.fget
-    monkeypatch.delenv('RESEARCH_AGENT_MODE', raising=False)
-    assert mode(None) is True
-    monkeypatch.setenv('RESEARCH_AGENT_MODE', 'fixed')
-    assert mode(None) is False
+    from agents.runtime import AGENTS, autonomous
+    class Configured:
+        agent_mode = Providers.agent_mode
+    monkeypatch.delenv('AGENT_MODE', raising=False)
+    assert all(autonomous(Configured(), agent) for agent in AGENTS)
+    monkeypatch.setenv('AGENT_MODE', 'fixed')
+    assert not any(autonomous(Configured(), agent) for agent in AGENTS)
+    monkeypatch.setenv('AGENT_MODE', 'research, verdict')
+    assert [agent for agent in AGENTS if autonomous(Configured(), agent)] == ['research', 'verdict']
 
 
 def test_planning_calls_are_budgeted_and_traced_by_the_validation_runner(monkeypatch, tmp_path):
@@ -209,7 +218,7 @@ def test_planning_calls_are_budgeted_and_traced_by_the_validation_runner(monkeyp
     monkeypatch.setattr(Providers, 'structured', structured)
     monkeypatch.setattr(Providers, 'search', web_search)
     monkeypatch.setenv('OPENAI_API_KEY', 'offline-test')
-    monkeypatch.delenv('RESEARCH_AGENT_MODE', raising=False)
+    monkeypatch.setenv('AGENT_MODE', 'research')
     trace = {'model': [], 'searches': []}
     result = asyncio.run(research_claim(CLAIM, AuditProvider(Budget(tmp_path / 'ledger.json', search_limit=4), trace), fetcher()))
     stages = [record['stage'] for record in trace['model']]

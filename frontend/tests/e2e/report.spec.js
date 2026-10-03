@@ -174,14 +174,19 @@ test('a private site asks for the password before showing research', async ({ pa
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
 });
 
-test('the research agent steps are listed when the agent planned its own research', async ({ page }) => {
-  await mockBackend(page, { factCheck: (route, json) => json(200, report({}, {
-    research_steps: ['Searched for supporting evidence: "tower height official" (3 new result(s)).', 'Finished: Both sides are covered.'] })) });
+test('the steps the agents chose are listed with the claim and the report', async ({ page }) => {
+  await mockBackend(page, { factCheck: (route, json) => json(200, report(
+    { agent_steps: ['Claim Extractor: Revised its extraction after the coverage check found a problem; the revision passed the check.'] },
+    { agent_steps: ['Orchestrator: Sent the claim to the Research Agent.',
+      'Research Agent: Searched for supporting evidence: "tower height official" (3 new result(s)).',
+      'Orchestrator: Asked the Verdict Agent for a verdict.'] })) });
   await page.goto('/');
   await page.getByLabel('Your statement').fill('Claim');
   await page.getByRole('button', { name: /Research this claim/ }).click();
-  await page.getByText('How the research agent worked (2 steps)').click();
+  await page.getByText('How the agents worked on this claim (3 steps)').click();
   await expect(page.getByText(/tower height official/)).toBeVisible();
+  await page.getByText('How the agents prepared this report (1 step)').click();
+  await expect(page.getByText(/Revised its extraction/)).toBeVisible();
 });
 
 test('evidence taken from the search provider copy is labelled', async ({ page }) => {

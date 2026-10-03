@@ -12,6 +12,16 @@ function Evidence({ item, demo, cited }) {
   </article>;
 }
 
+// What the agents chose to do, in order. Each line is "Agent name: what it did".
+function AgentSteps({ steps, label }) {
+  if (!steps?.length) return null;
+  return <details className="agent-steps"><summary>{label} ({steps.length} {steps.length === 1 ? 'step' : 'steps'})</summary>
+    <ol>{steps.map((text, i) => {
+      const at = text.indexOf(': ');
+      return <li key={i}>{at > 0 ? <><strong>{text.slice(0, at)}</strong>{text.slice(at)}</> : text}</li>;
+    })}</ol></details>;
+}
+
 export default function Report({ report }) {
   const reportElement = useRef(null);
   useEffect(() => {
@@ -55,6 +65,7 @@ export default function Report({ report }) {
     {report.omitted_claims && !report.coverage_status && <p className="notice" role="alert">Incomplete coverage: some assertions were omitted. Verdicts are withheld. Submit each assertion separately.</p>}
     {report.note && <p className="notice">{report.note}</p>}
     <p className="report-meta">{new Date(report.created_at).toLocaleString()}, {report.claims.length} {report.claims.length === 1 ? 'claim' : 'claims'} checked</p>
+    <AgentSteps steps={report.agent_steps} label="How the agents prepared this report" />
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}
     {report.claims.map((claim, index) => <article className="claim-result" key={index}>
       <p className="claim-number">Claim {index + 1} ({claim.status})</p>
@@ -95,8 +106,7 @@ export default function Report({ report }) {
           </details>
         </article>)}
       </details>}
-      {claim.research_steps?.length > 0 && <details className="research-steps"><summary>How the research agent worked ({claim.research_steps.length} steps)</summary>
-        <ol>{claim.research_steps.map((text, i) => <li key={i}>{text}</li>)}</ol></details>}
+      <AgentSteps steps={claim.agent_steps} label="How the agents worked on this claim" />
       <details><summary>Research coverage & limitations</summary><p><strong>Supporting search:</strong> {claim.supporting_search}</p><p><strong>Contradicting search:</strong> {claim.contradicting_search}</p><ul>{claim.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
     </article>)}
     <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul>{report.mode === 'live' && <p className="screen-only">This report is also kept under Saved reports.</p>}</aside>

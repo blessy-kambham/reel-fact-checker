@@ -1,7 +1,7 @@
 """Public entry points for the fact-checking pipeline.
 
-The implementation lives in `agents/`: an orchestrator runs the Claim Extractor, Research, Analyst,
-Citation Verifier and Verdict agents in a fixed order. This module keeps the original import path.
+The implementation lives in `agents/`: an orchestrator directs the Claim Extractor, Research, Analyst,
+Citation Verifier and Verdict agents. This module keeps the original import path.
 """
 from agents.orchestrator import (exact_submission_preserved, research_all, research_claim, run_pipeline,  # noqa: F401
                                  verify_citation, verify_selection)

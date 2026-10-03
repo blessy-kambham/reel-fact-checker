@@ -240,8 +240,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
 .rejected-citations > summary { color: var(--butter-ink); }
 .rejected-citations .evidence { margin-top: 12px; }
 
-.research-steps ol { margin: 8px 0 12px; padding-left: 22px; color: var(--mauve); }
-.research-steps li { margin-bottom: 4px; overflow-wrap: anywhere; }
+.agent-steps ol { margin: 8px 0 12px; padding-left: 22px; color: var(--mauve); }
+.agent-steps li { margin-bottom: 4px; overflow-wrap: anywhere; }
+.agent-steps strong { color: var(--plum); }
 
 .report-limitations { background: var(--petal); border: 1.5px dashed var(--rose); padding: 18px 20px; border-radius: 18px; font-size: 14px; line-height: 1.7; }
 .report-limitations h3 { font-size: 18px; }

@@ -1,6 +1,6 @@
 """Shared API and model-output contracts."""
 from typing import Annotated, Literal
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
 Verdict = Literal['TRUE', 'FALSE', 'PARTIALLY TRUE', 'MISLEADING', 'UNVERIFIABLE', 'OUTDATED', 'SATIRE']
@@ -49,15 +49,57 @@ class Analysis(StrictModel):
 
 class VerdictDecision(StrictModel):
     verdict: Verdict
-    evidence_ids: list[str] = Field(max_length=6, description='IDs from the verified evidence that justify this verdict. Never invent IDs.')
+    evidence_ids: list[str] = Field(max_length=12, description='IDs from the verified evidence that justify this verdict. Never invent IDs.')
+
+# ---- Agent actions: one step chosen by an agent. `tool` names the tool; the other fields are its arguments.
+# Free text has no length limit here; the application truncates whatever it stores or passes on. ----
+
+class OrchestratorAction(StrictModel):
+    """Which agent the orchestrator hands the claim to next."""
+    tool: Literal['research_agent', 'analyst_agent', 'citation_verifier', 'verdict_agent', 'finish']
+    instruction: str = Field(description='research_agent, second round only: what evidence is still missing. Empty otherwise.')
+    looking_for: Literal['supporting', 'contradicting'] = Field(description='research_agent, second round only: the kind of evidence that is missing.')
+    reason: str = Field(description='One sentence: why this agent next.')
+
+class ExtractorAction(StrictModel):
+    """The claim extractor's answer after seeing the problems a check found in its extraction."""
+    tool: Literal['revise', 'keep']
+    extraction: Extraction
+    reason: str = Field(description='One sentence: why.')
 
 class ResearchAction(StrictModel):
-    """One step chosen by the research agent: which tool to use next, and with what arguments."""
+    """One step chosen by the research agent."""
     tool: Literal['search_web', 'read_pages', 'finish']
-    query: str = Field(max_length=300, description='search_web only: the search query, written by you. Empty for other tools.')
+    query: str = Field(description='search_web only: the search query, written by you. Empty for other tools.')
     looking_for: Literal['supporting', 'contradicting'] = Field(description='search_web only: the kind of evidence this search is meant to find.')
     result_ids: list[str] = Field(max_length=3, description='read_pages only: IDs of unread search results to read (R1, R2, ...). Empty for other tools.')
-    reason: str = Field(max_length=300, description='One sentence: why this step.')
+    reason: str = Field(description='One sentence: why this step.')
+
+class AnalystAction(StrictModel):
+    """The analyst's answer after seeing which of its selections were set aside."""
+    tool: Literal['select_evidence', 'finish']
+    evidence: list[EvidenceSelection] = Field(max_length=3, description='select_evidence only: replacement excerpts not selected before. Empty for finish.')
+    reason: str = Field(description='One sentence: why.')
+
+class VerifierAction(StrictModel):
+    """One step chosen by the citation verifier."""
+    tool: Literal['accept', 'reject', 'read_full_page']
+    supports_attribution: bool = Field(description='The quote supports the attributed statement in context, without distortion. False when not yet decided.')
+    stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim. False when not yet decided.')
+    reason: str
+
+class VerdictAction(StrictModel):
+    """One step chosen by the verdict agent."""
+    tool: Literal['issue_verdict', 'request_evidence']
+    verdict: Verdict = Field(description='issue_verdict only. Use UNVERIFIABLE with request_evidence.')
+    evidence_ids: list[str] = Field(max_length=12, description='issue_verdict only: IDs from the verified evidence that justify this verdict. Never invent IDs.')
+    missing: str = Field(description='request_evidence only: the specific evidence that would settle the target assertion. Empty otherwise.')
+    looking_for: Literal['supporting', 'contradicting'] = Field(description='request_evidence only: the kind of evidence that is missing.')
+
+class ContentAction(StrictModel):
+    """One step chosen by the content extractor after its first look at a video."""
+    tool: Literal['read_more_frames', 'finish']
+    reason: str = Field(description='One sentence: why.')
 
 class EvidenceRelation(StrictModel):
     relation: Literal['SUPPORTS', 'CONTRADICTS', 'BACKGROUND', 'IRRELEVANT', 'UNCERTAIN']
@@ -107,8 +149,17 @@ class ClaimResult(StrictModel):
     supporting_search: str
     contradicting_search: str
     sources_checked: int
-    # What the research agent did, step by step, in plain words. Empty when the fixed plan was used.
-    research_steps: list[str] = Field(default_factory=list)
+    # What the agents did for this claim, step by step, in plain words. Empty when no agent planned its own steps.
+    agent_steps: list[str] = Field(default_factory=list)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _earlier_field_name(cls, data):
+        """Reports saved while this list was called `research_steps` still load."""
+        if isinstance(data, dict) and 'research_steps' in data:
+            data = dict(data)
+            data.setdefault('agent_steps', [f'Research Agent: {step}' for step in data.pop('research_steps')])
+        return data
     # Audit trail for the claim-specific verdict stage.
     verdict_state: Literal['issued', 'withheld'] = 'withheld'
     withheld_reason: WithheldReason | None = None
@@ -141,6 +192,8 @@ class Report(StrictModel):
     source_sha256: str | None = Field(default=None, description='Hash of the fetched article text or uploaded video the claims came from.')
     source_text: str | None = Field(default=None, description='For videos: the transcript, on-screen text and caption the claims were copied from.')
     media: 'MediaSummary | None' = None
+    # What the content and claim extractor agents did beyond their first pass, in plain words.
+    agent_steps: list[str] = Field(default_factory=list)
 
 class MediaSummary(StrictModel):
     duration_seconds: float
