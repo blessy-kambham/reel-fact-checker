@@ -42,6 +42,11 @@ class Providers:
     async def close(self):
         await self.client.close()
 
+    @property
+    def autonomous_research(self) -> bool:
+        """Whether the research agent plans its own searches (the default) or follows the fixed two-search plan."""
+        return os.getenv('RESEARCH_AGENT_MODE', 'autonomous').strip().lower() != 'fixed'
+
     async def structured(self, schema: type[BaseModel], instructions: str, data: str):
         spending = getattr(self, 'spending', None)
         # Raises BudgetExceeded before any request when the limit would be crossed.

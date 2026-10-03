@@ -174,6 +174,16 @@ test('a private site asks for the password before showing research', async ({ pa
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
 });
 
+test('the research agent steps are listed when the agent planned its own research', async ({ page }) => {
+  await mockBackend(page, { factCheck: (route, json) => json(200, report({}, {
+    research_steps: ['Searched for supporting evidence: "tower height official" (3 new result(s)).', 'Finished: Both sides are covered.'] })) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await page.getByText('How the research agent worked (2 steps)').click();
+  await expect(page.getByText(/tower height official/)).toBeVisible();
+});
+
 test('evidence taken from the search provider copy is labelled', async ({ page }) => {
   const [first, second] = report().claims[0].evidence;
   await mockBackend(page, { factCheck: (route, json) => json(200, report({}, {

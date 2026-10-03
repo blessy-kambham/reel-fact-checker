@@ -155,9 +155,9 @@ def prepare(results=RESULTS, root=snapshot.ROOT):
             'missing_settings': main.missing_settings(),
             'model_supported': model == VALIDATION_MODEL,
             'allowances': allowance_status(results),
-            'calls_per_claim': 'Per claim: at most 2 searches and 14 model calls (1 analysis, 2 per selected citation '
-                               'for relation and attribution with up to 6 citations, 1 verdict). Per report: 1-2 more '
-                               'model calls for extraction and coverage.'}
+            'calls_per_claim': 'Per claim: at most 5 searches and 24 model calls (up to 10 research-agent steps, '
+                               '1 analysis, 2 per selected citation for relation and attribution with up to 6 '
+                               'citations, 1 verdict). Per report: 1-2 more model calls for extraction and coverage.'}
 
 
 def create_app(allowance, max_usd, max_searches):

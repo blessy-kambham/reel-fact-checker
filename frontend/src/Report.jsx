@@ -95,6 +95,8 @@ export default function Report({ report }) {
           </details>
         </article>)}
       </details>}
+      {claim.research_steps?.length > 0 && <details className="research-steps"><summary>How the research agent worked ({claim.research_steps.length} steps)</summary>
+        <ol>{claim.research_steps.map((text, i) => <li key={i}>{text}</li>)}</ol></details>}
       <details><summary>Research coverage & limitations</summary><p><strong>Supporting search:</strong> {claim.supporting_search}</p><p><strong>Contradicting search:</strong> {claim.contradicting_search}</p><ul>{claim.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
     </article>)}
     <aside className="report-limitations"><h3>Keep in mind</h3><ul>{report.limitations.map((text,i) => <li key={i}>{text}</li>)}</ul>{report.mode === 'live' && <p className="screen-only">This report is also kept under Saved reports.</p>}</aside>

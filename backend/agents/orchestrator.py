@@ -47,13 +47,14 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
 
 async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(), copy_markers=()) -> ClaimResult:
     """Take one claim through research, analysis, citation verification and the verdict."""
-    # 1. Research Agent: search both directions and read the pages.
+    # 1. Research Agent: plans its own searches, reads pages, and always covers both directions.
     pack = await ResearchAgent(provider, fetch).gather(claim, exclude, copy_markers)
     sources, warnings, search_status = pack.sources, pack.warnings, pack.search_status
     if not sources:
         result = unresolved(claim.text, 'No readable sources were retrieved. Search snippets are not accepted as verified evidence.',
                             'search_failed' if pack.search_failed else 'no_sources')
-        return result.model_copy(update={'supporting_search': search_status['FOR'], 'contradicting_search': search_status['AGAINST'], 'limitations': result.limitations + warnings})
+        return result.model_copy(update={'supporting_search': search_status['FOR'], 'contradicting_search': search_status['AGAINST'],
+                                         'limitations': result.limitations + warnings, 'research_steps': list(pack.steps)})
 
     # 2. Analyst Agent: select passages for and against the claim.
     analysis, excerpts = await AnalystAgent(provider).propose(claim, sources)
@@ -103,7 +104,7 @@ async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(),
     return ClaimResult(claim=claim.text, verdict=verdict, status='incomplete' if incomplete else 'complete',
                        evidence=usable, rejected_citations=[c for c in citations if not c.verified], limitations=list(dict.fromkeys(warnings)),
                        supporting_search=search_status['FOR'], contradicting_search=search_status['AGAINST'], sources_checked=len(sources),
-                       verdict_state='withheld' if withheld else 'issued', withheld_reason=withheld,
+                       research_steps=list(pack.steps), verdict_state='withheld' if withheld else 'issued', withheld_reason=withheld,
                        withheld_message=WITHHELD_MESSAGES[withheld] if withheld else None,
                        decision_verdict=decision_verdict, decision_evidence_ids=decision_ids,
                        verdict_evidence_ids=[] if withheld else decision_ids, verdict_source_count=verdict_sources)
@@ -158,6 +159,6 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
                       limitations=[reason] + coverage_issues, usage=provider.usage,
                       omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
     results = await research_all(extraction.claims, provider, fetch) if extraction.intent == 'FACTUAL' else []
-    limitations = ['At most three claims and six search results per claim are checked per report.']
+    limitations = ['At most three claims are checked per report, with up to eight pages read per claim.']
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
                   note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])

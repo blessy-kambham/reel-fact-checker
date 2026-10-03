@@ -106,6 +106,8 @@ class Offline:
     def __init__(self, monkeypatch):
         self.fake, self.calls = FakeProvider(), []
         offline = self
+        # These tests pin the call sequence of the fixed research plan; the planning loop has its own tests.
+        monkeypatch.setenv('RESEARCH_AGENT_MODE', 'fixed')
         async def structured(provider, schema, instructions, data):
             offline.calls.append(schema.__name__)
             provider.usage['model_calls'] += 1

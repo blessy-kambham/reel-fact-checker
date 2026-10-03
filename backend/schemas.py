@@ -51,6 +51,14 @@ class VerdictDecision(StrictModel):
     verdict: Verdict
     evidence_ids: list[str] = Field(max_length=6, description='IDs from the verified evidence that justify this verdict. Never invent IDs.')
 
+class ResearchAction(StrictModel):
+    """One step chosen by the research agent: which tool to use next, and with what arguments."""
+    tool: Literal['search_web', 'read_pages', 'finish']
+    query: str = Field(max_length=300, description='search_web only: the search query, written by you. Empty for other tools.')
+    looking_for: Literal['supporting', 'contradicting'] = Field(description='search_web only: the kind of evidence this search is meant to find.')
+    result_ids: list[str] = Field(max_length=3, description='read_pages only: IDs of unread search results to read (R1, R2, ...). Empty for other tools.')
+    reason: str = Field(max_length=300, description='One sentence: why this step.')
+
 class EvidenceRelation(StrictModel):
     relation: Literal['SUPPORTS', 'CONTRADICTS', 'BACKGROUND', 'IRRELEVANT', 'UNCERTAIN']
     reason: str
@@ -99,6 +107,8 @@ class ClaimResult(StrictModel):
     supporting_search: str
     contradicting_search: str
     sources_checked: int
+    # What the research agent did, step by step, in plain words. Empty when the fixed plan was used.
+    research_steps: list[str] = Field(default_factory=list)
     # Audit trail for the claim-specific verdict stage.
     verdict_state: Literal['issued', 'withheld'] = 'withheld'
     withheld_reason: WithheldReason | None = None
