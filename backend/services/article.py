@@ -1,12 +1,13 @@
 """Article URL ingestion: fetch a public article, pick up to three central claims copied verbatim,
 and research them with the same pipeline. The article itself never counts as evidence."""
 import hashlib
-import json
 from uuid import uuid4
 
-from schemas import AtomicClaim, Extraction, Report
+from agents.claim_extractor import ClaimExtractorAgent
+from agents.orchestrator import research_all
+from agents.shared import loose, now, page_key, unresolved
+from schemas import AtomicClaim, Report
 from services.fetcher import fetch_text
-from services.pipeline import loose, now, page_key, research_all, unresolved  # noqa: F401 (loose re-exported)
 
 MAX_CONTEXT_CHARS = 600
 
@@ -26,15 +27,7 @@ async def select_and_research(text, provider, fetch=fetch_text, *, kind, exclude
     word for word are refused, never researched; context not found word for word is dropped. Pages in
     `exclude`, and pages repeating a claim or its context word for word, are never used as evidence.
     """
-    extraction = await provider.structured(Extraction,
-        f'This is {kind}. Classify its intent. Select at most three central factual claims it '
-        'itself asserts: the claims a reader most needs checked, capable of being checked, not known to be true. '
-        'Include false, misleading and uncertain claims exactly as asserted; never skip one because you think it is wrong. '
-        'Copy each claim VERBATIM as a contiguous substring of the text; do not paraphrase, merge or expand pronouns. '
-        'Prefer claims that stand alone. Set context to the verbatim surrounding sentence or two (at most 600 characters) '
-        'that a reader needs to understand the claim. Ignore navigation, advertising, comments and quotes the text rejects. '
-        'Set omitted_claims when the text contains other checkable claims. For opinion, satire or fiction return no claims. '
-        'Do not determine truth.', json.dumps({'text': text}))
+    extraction = await ClaimExtractorAgent(provider).select_from_document(text, kind)
     checked, refused, context_dropped = [], [], 0
     for claim in extraction.claims if extraction.intent == 'FACTUAL' else []:
         if not verbatim(claim.text, text):

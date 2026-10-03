@@ -265,3 +265,30 @@ def test_changed_text_or_invented_context_cannot_bypass_audit(claim, context):
     from services.pipeline import exact_submission_preserved
     extraction = Extraction(intent='FACTUAL', claims=[AtomicClaim(text=claim, context=context)], omitted_claims=False, note='')
     assert not exact_submission_preserved('The Moon never rotates.', extraction)
+
+
+def test_each_agent_is_used_by_the_pipeline():
+    # The agents folder is the pipeline: one check through research_claim calls every per-claim agent.
+    from agents import analyst_agent, citation_verifier, research_agent, verdict_agent
+    calls = []
+    def spy(cls, method):
+        original = getattr(cls, method)
+        async def wrapper(self, *args, **kwargs):
+            calls.append(cls.name)
+            return await original(self, *args, **kwargs)
+        return original, wrapper
+    targets = [(research_agent.ResearchAgent, 'gather'), (analyst_agent.AnalystAgent, 'propose'),
+               (analyst_agent.AnalystAgent, 'classify'), (citation_verifier.CitationVerifierAgent, 'verify'),
+               (verdict_agent.VerdictAgent, 'decide')]
+    originals = []
+    try:
+        for cls, method in targets:
+            original, wrapper = spy(cls, method)
+            originals.append((cls, method, original))
+            setattr(cls, method, wrapper)
+        result = asyncio.run(research_claim(CLAIM, FakeProvider(), fake_fetch))
+    finally:
+        for cls, method, original in originals:
+            setattr(cls, method, original)
+    assert result.verdict == 'TRUE'
+    assert calls == ['Research Agent', 'Analyst Agent', 'Analyst Agent', 'Citation Verifier', 'Verdict Agent']

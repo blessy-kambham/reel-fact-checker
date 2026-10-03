@@ -15,37 +15,36 @@ I built this as a portfolio project to explore a question I care about: how do y
 
 ## How it works
 
+The pipeline is a set of single-purpose agents run in a fixed order by an orchestrator. Each agent has one job and sees only what it needs.
+
 ```text
-statement ─┐
-article ───┼─▶ extract up to 3 claims, copied word for word from the input
-video ─────┘        │
-  (ffmpeg, Whisper, │   for each claim (two at a time):
-   keyframe text)   ▼
-              search for supporting evidence ─┐
-              search for contradicting evidence ─┤
-                                                 ▼
-              fetch the pages, split them into numbered excerpts
-                                                 ▼
-              analysis: the model selects excerpt IDs (it never writes quotes)
-                                                 ▼
-              relation check: does this passage support, contradict or
-              merely relate to this exact claim?
-                                                 ▼
-              attribution check: does the quote really say what is claimed?
-                                                 ▼
-              verdict: a separate call that sees only the claim and the
-              verified evidence, and must cite evidence IDs
-                                                 ▼
-                       report, saved to history
+video ──▶ Content Extractor ─┐
+article ─────────────────────┼─▶ Claim Extractor ─▶ for each claim, two at a time:
+statement ───────────────────┘
+                                   Research Agent ─▶ Analyst Agent ─▶ Citation Verifier ─▶ Verdict Agent
+                                                                                                │
+                                                                    report, saved to history ◀──┘
 ```
+
+| Agent | Job |
+| --- | --- |
+| [Orchestrator](backend/agents/orchestrator.py) | Runs the agents in order, runs claims in parallel and decides when a verdict must be withheld. Plain code, not a model. |
+| [Content Extractor](backend/agents/content_extractor.py) | Turns a video into text: speech (Whisper), on-screen text (keyframes) and caption. |
+| [Claim Extractor](backend/agents/claim_extractor.py) | Classifies the content and extracts up to three claims, copied word for word. |
+| [Research Agent](backend/agents/research_agent.py) | One per claim. Searches for supporting and contradicting evidence and reads the pages. |
+| [Analyst Agent](backend/agents/analyst_agent.py) | Selects passages for and against the claim by ID and classifies how each relates to it. |
+| [Citation Verifier](backend/agents/citation_verifier.py) | Confirms each quote exists in the page and says what it is cited for. |
+| [Verdict Agent](backend/agents/verdict_agent.py) | Gives the verdict from verified evidence only, citing evidence IDs. |
+
+The agents are role-based: the orchestrator fixes the order, so no agent can skip a check or issue a verdict without evidence. [`backend/agents/README.md`](backend/agents/README.md) shows where each one is used.
 
 ## Design decisions
 
 These are the choices that shaped the project, most of them made after a live test showed a failure.
 
-- **The model never writes a quote.** Early versions asked the model to quote its sources, and it altered punctuation, joined separate passages and paraphrased. Now the app splits each page into numbered excerpts, the model picks IDs, and the app copies the text itself. Citations record character offsets and a SHA-256 fingerprint of the page text.
-- **Stance is decided separately from analysis.** The analysis step sometimes labelled contradicting evidence as supporting. A separate call now classifies each passage against the specific claim without seeing the proposed verdict, and passages about a neighbouring claim are excluded as irrelevant.
-- **The verdict is isolated.** The final verdict comes from a call that receives only the claim and the verified evidence. In a compound sentence this stops one claim's verdict drifting toward the other's.
+- **The model never writes a quote.** Early versions asked the model to quote its sources, and it altered punctuation, joined separate passages and paraphrased. Now the app splits each page into numbered excerpts, the Analyst Agent picks IDs, and the app copies the text itself. Citations record character offsets and a SHA-256 fingerprint of the page text.
+- **Stance is decided separately from selection.** The analyst's first pass sometimes labelled contradicting evidence as supporting. A separate call now classifies each passage against the specific claim without seeing the proposed verdict, and passages about a neighbouring claim are excluded as irrelevant.
+- **The verdict is isolated.** The Verdict Agent receives only the claim and the verified evidence. In a compound sentence this stops one claim's verdict drifting toward the other's.
 - **Claims must be verbatim.** Extracted claims are checked against the original text, so the model cannot quietly drop, soften or rewrite an assertion. Minor differences in quotes, apostrophes and dashes are tolerated.
 - **Withhold rather than guess.** Each claim reports whether its verdict was issued or withheld, with a specific reason such as `no_sources`, `citation_failed` or `conflicting_evidence`. A verdict resting on a single page is flagged.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
@@ -73,10 +72,14 @@ These are the choices that shaped the project, most of them made after a live te
 backend/
   main.py                API routes, access control, limits, static serving
   schemas.py             Pydantic contracts shared by the API and the model
+  agents/                one file per agent, plus the orchestrator that runs them
+    orchestrator.py      order of the steps, parallel research, withholding rules
+    content_extractor.py claim_extractor.py research_agent.py
+    analyst_agent.py     citation_verifier.py verdict_agent.py
   services/
-    pipeline.py          claim extraction, research, citation checks, verdicts
-    article.py           article ingestion and verbatim claim selection
-    video.py, media.py   video validation, audio and keyframe extraction
+    pipeline.py          public entry points (the implementation is in agents/)
+    article.py           article ingestion and verbatim claim checks
+    video.py, media.py   video entry point, ffmpeg validation and extraction
     transcribe.py        local Whisper transcription
     providers.py         OpenAI and Tavily adapters
     fetcher.py           safe page fetching
@@ -158,7 +161,7 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 276 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 277 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
 npx playwright install chromium && npm run test:e2e   # 14 browser tests, mocked backend

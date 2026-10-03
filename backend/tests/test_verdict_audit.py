@@ -142,7 +142,7 @@ def test_one_failed_search_direction_is_named():
 
 
 def test_claim_timeout_and_provider_failure_are_named(monkeypatch):
-    import services.pipeline as pipeline
+    import agents.orchestrator as pipeline
     async def slow(*args, **kwargs):
         raise asyncio.TimeoutError()
     monkeypatch.setattr(pipeline, 'research_claim', slow)
@@ -200,11 +200,14 @@ def test_withheld_or_unverifiable_verdicts_are_not_flagged():
 
 
 def test_prompts_carry_no_validation_case_examples():
+    # Prompts must not contain the claims used to validate the pipeline.
     import inspect
-    import services.pipeline as pipeline
-    source = inspect.getsource(pipeline).casefold()
-    for word in ('moon', 'sunlight', 'eiffel', 'pluto', 'great wall'):
-        assert word not in source
+    from agents import analyst_agent, citation_verifier, claim_extractor, content_extractor, verdict_agent
+    for module in (analyst_agent, citation_verifier, claim_extractor, content_extractor, verdict_agent):
+        source = inspect.getsource(module).casefold()
+        assert 'provider.structured(' in source or 'provider.read_images(' in source  # The module holds a prompt.
+        for word in ('moon', 'sunlight', 'eiffel', 'pluto', 'great wall'):
+            assert word not in source
 
 
 def test_relation_and_analysis_prompts_exclude_neighbouring_assertions():

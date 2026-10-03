@@ -227,6 +227,6 @@ def test_split_escape_punctuation_variant_is_repaired():
 
 
 def test_relation_prompt_treats_differently_written_dates_as_compatible():
-    from services.pipeline import verify_selection
+    from agents.analyst_agent import AnalystAgent
     import inspect
-    assert 'weekday versus a calendar date' in inspect.getsource(verify_selection)
+    assert 'weekday versus a calendar date' in inspect.getsource(AnalystAgent.classify)
