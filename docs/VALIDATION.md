@@ -1,6 +1,6 @@
 # Validation with real providers
 
-The automated tests use scripted providers, so they prove that the pipeline follows its rules, not that it reaches correct verdicts. To find out how it behaves for real, I ran it against OpenAI and Tavily in small, budgeted sessions between 27 September and 2 October 2026. This document summarises what those sessions found and what changed as a result.
+The automated tests use scripted providers, so they prove that the pipeline follows its rules, not that it reaches correct verdicts. To find out how it behaves for real, I ran it against OpenAI and Tavily in small, budgeted sessions between 27 September and 5 October 2026. This document summarises what those sessions found and what changed as a result.
 
 These are engineering checks on a handful of cases. They are not an accuracy benchmark.
 
@@ -12,7 +12,7 @@ These are engineering checks on a handful of cases. They are not an accuracy ben
 - **Full traces.** Each run saved the extraction, the searches, the pages read, every accepted and rejected citation, token usage and latency. Traces contain third-party page text and are not committed.
 - **Reference claims.** `backend/evaluation/real_cases.json` holds twelve starter claims with reference sources (NASA, USGS, the IAU, the Eiffel Tower's operator). Reference verdicts were never shown to the model.
 
-All sessions together cost roughly $0.50 in model usage.
+All sessions together cost roughly $0.55 in model usage.
 
 ## What went wrong, and what changed
 
@@ -47,6 +47,19 @@ All sessions together cost roughly $0.50 in model usage.
 | The Great Wall of China is visible from the Moon | FALSE | Also verified on the deployed site |
 | An unnamed visitor counted exactly 777 steps yesterday | Verdict withheld | Abstaining is right for an uncheckable private claim, but at the time it happened because of the step-count misreading above |
 
+### Agents choosing their own steps
+
+The results above were produced when each agent did one fixed pass. After every agent was given its own tools and an orchestrator agent began routing each claim, I ran two statements again on 5 October to check that the agents reach checked verdicts when they plan for themselves.
+
+| Claim | Result | What the agents did |
+| --- | --- | --- |
+| The Great Wall of China is visible from the Moon with the naked eye | FALSE | Research agent wrote two queries and read six pages; six passages verified; verdict cited five of them from four sites |
+| Mount Everest is the highest mountain on Earth above sea level | TRUE | Research agent wrote two queries and read five pages; six passages verified; verdict cited five of them from three sites |
+
+Each claim took 24 model calls and 2 searches, 42 to 49 seconds, and about three cents. In both runs the orchestrator chose the usual route (research, analysis, verification, verdict) in four steps, and the citation verifier decided every long page from the passage around the quote.
+
+What these two runs did not exercise: a second research round, the analyst replacing set-aside selections, a full-page read by the verifier, the verdict agent asking for more evidence, and the claim extractor revising an extraction. None was needed, so those paths are covered by offline tests only. One accepted passage in the Great Wall run described visibility from low orbit and was classed as contradicting the claim, where background would have been more accurate; the verdict did not cite it.
+
 ### Videos
 
 Three generated Reel-format videos with known answers, run on a laptop with ffmpeg and the Whisper `small` model.
@@ -67,7 +80,7 @@ One article, a NASA launch press release, was run live. Two of its three claims 
 
 - **Accuracy at scale.** A dozen claims and three videos show the pipeline working on specific cases.
 - **Citation precision.** Accepted citations passed automated checks. Nobody reviewed them by hand.
-- **Source quality.** Some verdicts rested on a single page or on weak secondary sources. The report flags single-source verdicts but does not score credibility.
+- **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. The report flags single-source verdicts but does not score credibility.
 - **Real Reels.** The test videos were generated with clear speech. Background music, fast speech and brief captions are untested.
 
 ## Reproducing a session

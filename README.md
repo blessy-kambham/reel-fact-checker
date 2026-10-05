@@ -179,7 +179,7 @@ Passing tests show that the pipeline follows its rules. They do not measure fact
 
 ## Validation with real providers
 
-I tested the pipeline against live providers in small, budgeted sessions, and used each failure to change the design. The latest rounds returned correct verdicts for the text claims they covered and for three test videos, including one with no audio. Article mode produced one wrong verdict in its live run; its causes are fixed and tested offline but not yet re-run live. The full account, including what went wrong along the way, is in [docs/VALIDATION.md](docs/VALIDATION.md).
+I tested the pipeline against live providers in small, budgeted sessions, and used each failure to change the design. The latest rounds returned correct verdicts for the text claims they covered and for three test videos, including one with no audio. After the agents were given their own tools, two statements were re-run live and both returned correct, fully cited verdicts; the agents' less common choices, such as a second research round, are covered by offline tests only. Article mode produced one wrong verdict in its live run; its causes are fixed and tested offline but not yet re-run live. The full account, including what went wrong along the way, is in [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Deployment
 
