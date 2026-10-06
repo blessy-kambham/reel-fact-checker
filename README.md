@@ -189,18 +189,21 @@ I tested the pipeline against live providers in small, budgeted sessions, and us
 
 ## Scorecard
 
-I ran 30 claims with known answers through the live system and scored the result against the targets in the design brief.
+I ran 30 claims with known answers through the live system and scored the result against the targets in the design brief. Then I made three changes the results pointed to and ran the same claims again.
 
-| Measure | Result | Target |
-| --- | --- | --- |
-| Right verdict | 25 of 30 (83%) | 85% or more |
-| Wrong verdict | 2, neither the opposite of the truth | |
-| No verdict when one was expected | 10% | under 15% |
-| Citation checks failed | 2% of 167 passages | under 5% |
-| Cost per claim | about 3 cents | under 15 cents |
-| Time per claim | median 46 s | under 120 s |
+| Measure | First run | After the changes | Target |
+| --- | --- | --- | --- |
+| Right verdict | 25 of 30 (83%) | 26 of 30 (87%) | 85% or more |
+| Wrong verdict | 2 | 2, none the opposite of the truth | |
+| No verdict when one was expected | 10% | 7% | under 15% |
+| Verdicts resting on three or more sites | 10 of 26 | 26 of 27 | every verdict |
+| Citation checks failed | 2% of passages | 6% of passages | under 5% |
+| Cost per claim | about 3 cents | about 3.5 cents | under 15 cents |
+| Time per claim | median 46 s | median 64 s | under 120 s |
 
-The first pass scored 63%: seven claims were dropped when the model provider limited requests. After adding a wait-and-retry, those seven were run again and all were right. The set is small and made of well-known facts and myths, so this is a behaviour check, not an accuracy claim. Every claim, the misses and the method are in [docs/SCORECARD.md](docs/SCORECARD.md).
+The changes: a passage that fails its citation check is now left out instead of withholding the whole verdict; the agents aim for three different sites per verdict; and a passage that only reports an old belief was meant to stop counting as support. The first two worked. The third did not: two claims are still withheld because one such passage was filed as support, and that labelling step is the next thing to fix. The run also got slower, and more passages were rejected.
+
+The set is small, made of well-known facts and myths, and the changes were chosen by looking at these same claims, so this is a behaviour check, not an accuracy claim. Every claim, every miss and the method are in [docs/SCORECARD.md](docs/SCORECARD.md).
 
 ## Deployment
 
@@ -219,6 +222,8 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 
 ## What I would do next
 
+- Fix how a passage is filed as supporting or contradicting a claim: the scorecard's remaining misses come from that step.
+- Score the system on a fresh set of claims it was not tuned on.
 - Rate sources from more than their address (author, date, citations), and judge whether two sites are really independent rather than only different.
 - Review accepted citations by hand on a larger reference set to measure precision.
 - Test real Reels with background music, fast speech and fast-changing text.
