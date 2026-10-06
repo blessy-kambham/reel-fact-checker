@@ -1,6 +1,6 @@
 # Validation with real providers
 
-The automated tests use scripted providers, so they prove that the pipeline follows its rules, not that it reaches correct verdicts. To find out how it behaves for real, I ran it against OpenAI and Tavily in small, budgeted sessions between 27 September and 5 October 2026. This document summarises what those sessions found and what changed as a result.
+The automated tests use scripted providers, so they prove that the pipeline follows its rules, not that it reaches correct verdicts. To find out how it behaves for real, I ran it against OpenAI and Tavily in small, budgeted sessions between 27 September and 6 October 2026. This document summarises what those sessions found and what changed as a result.
 
 These are engineering checks on a handful of cases. They are not an accuracy benchmark.
 
@@ -12,7 +12,7 @@ These are engineering checks on a handful of cases. They are not an accuracy ben
 - **Full traces.** Each run saved the extraction, the searches, the pages read, every accepted and rejected citation, token usage and latency. Traces contain third-party page text and are not committed.
 - **Reference claims.** `backend/evaluation/real_cases.json` holds twelve starter claims with reference sources (NASA, USGS, the IAU, the Eiffel Tower's operator). Reference verdicts were never shown to the model.
 
-All sessions together cost roughly $0.55 in model usage.
+All sessions together cost roughly $0.60 in model usage.
 
 ## What went wrong, and what changed
 
@@ -60,6 +60,16 @@ Each claim took 24 model calls and 2 searches, 42 to 49 seconds, and about three
 
 What these two runs did not exercise: a second research round, the analyst replacing set-aside selections, a full-page read by the verifier, the verdict agent asking for more evidence, and the claim extractor revising an extraction. None was needed, so those paths are covered by offline tests only. One accepted passage in the Great Wall run described visibility from low orbit and was classed as contradicting the claim, where background would have been more accurate; the verdict did not cite it.
 
+### Source credibility
+
+After sources began to be rated by where they come from, I re-ran the Great Wall statement on 6 October. Its earlier run had cited an Instagram reel.
+
+| Claim | Result | What changed |
+| --- | --- | --- |
+| The Great Wall of China is visible from the Moon with the naked eye | FALSE | The same reel came back in both searches, labelled as social media, and the research agent did not read it. The verdict cited Britannica and two unrated sites: source strength moderate, source score 60. |
+
+The run took 24 model calls, 2 searches, 53 seconds and about two cents. One of the unrated sites is a magazine from an established publisher that is not on the lists, which shows their limit: a site that is not listed is rated as unknown, not as poor.
+
 ### Videos
 
 Three generated Reel-format videos with known answers, run on a laptop with ffmpeg and the Whisper `small` model.
@@ -80,7 +90,7 @@ One article, a NASA launch press release, was run live. Two of its three claims 
 
 - **Accuracy at scale.** A dozen claims and three videos show the pipeline working on specific cases.
 - **Citation precision.** Accepted citations passed automated checks. Nobody reviewed them by hand.
-- **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. Since then, social media pages are refused as evidence and each verdict reports the strength of its sources, but that rating comes from short lists of known sites and has not been checked against the live runs above.
+- **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. Since then, social media pages are refused as evidence and each verdict reports the strength of its sources. That rating comes from short lists of known sites and has been checked live on one claim only.
 - **Real Reels.** The test videos were generated with clear speech. Background music, fast speech and brief captions are untested.
 
 ## Reproducing a session
