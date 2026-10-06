@@ -2,7 +2,7 @@
 
 How the system did on 30 claims with known answers, set against the targets in the design brief it was built from. Run on 6 October 2026 with `gpt-4.1-mini`, Tavily search and every agent planning its own steps.
 
-The claims were run twice: once as the system stood, and once after three changes the first run pointed to. This page reports both.
+The claims were run twice: once as the system stood, and once after three changes the first run pointed to. This page reports both, and then a third, smaller check on ten claims the system had never been run on.
 
 This is a small set of mostly well-known facts and myths, labelled by me. It shows how the system behaves on these cases. It is not an accuracy rate for claims in general.
 
@@ -49,7 +49,38 @@ The first run had five misses. Two were verdicts withheld because one citation f
 | Water freezes at 0 degrees Celsius at standard atmospheric pressure. | TRUE | PARTIALLY TRUE | Right in the first run. A passage about the freezing point being 0.01 degrees below water's triple point was filed as contradicting the claim. |
 | Sound cannot travel through a vacuum. | TRUE | PARTIALLY TRUE | Same as the first run: it weighed a 2023 experiment that passed sound across a tiny vacuum gap against the textbook statement. |
 
-Three of these four come from the same step: the check that decides whether a passage supports or contradicts the claim. Telling it in words to separate a reported belief from a statement of fact was not enough. The more passages a claim gathers, the more chances that one is filed on the wrong side, and a single such passage withholds an otherwise clear verdict. That step is the next thing to fix.
+Three of these four come from the same step: the check that decides whether a passage supports or contradicts the claim. Telling it in words to separate a reported belief from a statement of fact was not enough. The more passages a claim gathers, the more chances that one is filed on the wrong side, and a single such passage withholds an otherwise clear verdict. That step was the next thing to change.
+
+## A check on fresh claims
+
+After the second run I changed the labelling step again, and then scored the system on ten claims it had never been run on, so that for once the test was not made of the cases the changes came from. The four misses of the second run were run again alongside.
+
+The change: the check that files a passage as support or contradiction now also has to say whose voice the passage is in, the page's own or a belief the page reports, and the application treats a reported belief as background even when it was filed as support. All three judgments were also reordered so that the model writes its reasoning before its answer.
+
+| Measure | Ten fresh claims | The four earlier misses |
+| --- | --- | --- |
+| Right verdict | 10 of 10 | 2 of 4 |
+| Wrong verdict | 0 | 1 |
+| No verdict | 0 | 1 |
+| Citation checks failed | 0 of 68 passages | 1 of 26 |
+| Verdicts citing three or more sites | 8 of 10 | 2 of 3 |
+| Cost per claim | $0.035 | $0.033 |
+| Time per claim | median 50 s, 95th percentile 82 s | median 52 s |
+
+The fresh claims were four plain facts (the heart has four chambers, Jupiter is the largest planet, Kilimanjaro is in Tanzania, the Nile flows north into the Mediterranean) and six popular myths, chosen because pages about them say "many people believe": knuckle-cracking and arthritis, sugar and hyperactivity, shaving and thicker hair, ostriches burying their heads, a flat Earth, and the tongue map. They are in [`scorecard_cases_fresh.json`](../backend/evaluation/scorecard_cases_fresh.json).
+
+What this check does and does not show:
+
+- **Ten of ten on unseen claims** is the best evidence here that the earlier scores were not only the result of tuning on the test. They are still ten easy claims.
+- **The new rule never fired.** In fourteen claims the model did not once mark a supporting passage as a reported belief, so nothing was downgraded. The good results cannot be credited to it. Offline tests show the application applies the rule when the model does mark a passage that way; whether the model will is unproven.
+- **The Sun claim failed a third time, for the same reason.** "According to this model, the Sun, the Moon, and the planets all execute uniform circular orbits around the Earth" was filed as support in the page's own voice. A second such passage was caught by the citation verifier, which placed it on the other side of the claim, and that withheld the verdict: the first time that safeguard has fired. The claim is withheld rather than wrong, which is the intended way to fail, but three attempts at this have not fixed it.
+- **Fewer passages were rejected**: 1 of 94 across both sets, against 12 of 198 in the second run. The claims differ, so this is suggestive, not a measurement. Writing the reasoning before the answer is the likely cause.
+- **Two earlier misses came back right** (water freezing at 0 degrees, the 10 percent myth). With one run each, and the new rule never firing, that may be chance.
+- **Sound in a vacuum was "partially true" a third time.** The system keeps finding the 2023 experiment and weighing it against the textbook answer. I now think my label is the weaker side of that disagreement.
+
+Each verdict in this check also carried the new confidence level. Of the thirteen verdicts issued, two were high (both right), six medium (all right) and five low (four right, one wrong). The one wrong verdict was a low one, which is the right direction and far too little to conclude anything from. The four right verdicts rated low were rated so because none of their sites is on the short credibility lists.
+
+This check cost $0.49 and 45 searches.
 
 Three claims changed for the better: the two that were withheld over a failed citation now have the right verdict (Sahara, Pluto), and the claim about 206 bones came back TRUE instead of PARTIALLY TRUE.
 
@@ -119,7 +150,7 @@ The first run cost $1.03 in model usage and 96 searches over its two passes. The
 
 ## What this does not show
 
-- **A fair test of the changes.** The three changes were chosen by looking at these same 30 claims, and then scored on them. A fresh set of claims would be the fair test, and would likely score lower.
+- **A fair test of the first three changes.** They were chosen by looking at the 30 claims and then scored on them. The ten fresh claims are the only unseen ones, and now that they have been used they are no longer unseen.
 - **Stability.** Each claim was run once per run. The model and the search results vary, so some of the claim-by-claim differences between the runs are chance rather than the changes.
 - **Hard claims.** These are textbook facts and popular myths. Statistics, recent events, quotes and politically contested claims are not covered.
 - **Independent labels.** I wrote the expected answers. The "partially true" results show that some of them could be argued.
@@ -133,6 +164,8 @@ From `backend/`:
 ```sh
 python -m evaluation.scorecard                                    # offline: lists the cases, summarises saved runs
 python -m evaluation.scorecard --allow-paid --name NAME --max-usd 1.25
+python -m evaluation.scorecard --allow-paid --name NAME --max-usd 0.55 --cases evaluation/scorecard_cases_fresh.json
+python -m evaluation.scorecard --allow-paid --name NAME --max-usd 0.30 --only sun-orbits,vacuum
 ```
 
 The cases are in [`backend/evaluation/scorecard_cases.json`](../backend/evaluation/scorecard_cases.json). A run stops starting new claims near its spending cap, and running the same name again continues where it stopped and retries any claim a provider interrupted.

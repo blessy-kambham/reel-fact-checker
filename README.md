@@ -58,7 +58,7 @@ These are the choices that shaped the project, most of them made after a live te
 - **Three sites is a goal, not a gate.** The analyst is asked to spread its selections over different sites, and a claim whose verified evidence comes from fewer than three gets one more research round that looks beyond the sites already used. If that finds nothing, the verdict is still issued and says how many sites it rests on. Sections of one organisation's site (`en.wikipedia.org`, `simple.wikipedia.org`) count as one.
 - **Credibility is a stated rule, not a guess.** Sources are rated from their web address against short, published lists in [`backend/tools/credibility.py`](backend/tools/credibility.py), using the eight categories and weights of the design brief plus "unrated" for the rest of the web. The rating keeps social media and blogs out of the evidence and labels each verdict's sources as strong, moderate or weak, but it never changes a verdict and is not presented as the chance that a verdict is right.
 - **Confidence is a level, not a percentage.** The brief asks for a confidence percentage. Thirty scored claims cannot support one, so each verdict gets high, medium or low from things that can be counted: how many sites back it, what kind of sites they are, whether verified evidence points both ways, and how many selected passages failed their check. The reasons are shown with the level ([`backend/services/summary.py`](backend/services/summary.py)).
-- **A belief is not evidence.** "Many believe X" and "under the old model, X" are true sentences that do not support X. The check that files each passage as support or contradiction also says whose voice the passage is in, and the application treats a reported belief as background whatever the model filed it as.
+- **A belief is not evidence.** "Many believe X" and "under the old model, X" are true sentences that do not support X. The check that files each passage as support or contradiction also says whose voice the passage is in, and the application treats a reported belief as background even when the model filed it as support. This is the second attempt at the problem, and it is unproven: in the live check that followed, the model never marked a passage that way (see the [scorecard](docs/SCORECARD.md)).
 - **Reuse goes back to the original.** A repeated claim is recognised by its words and context, not by meaning, and only a real verdict issued on complete research is reused. A reused result is never itself reused, so nothing outlives its seven days, and deleting the original report makes the claim be researched again.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
 - **Blocked pages fall back transparently.** When a site refuses the app's fetcher, the search provider's extracted text for that page is used instead, and the report labels that evidence.
@@ -208,9 +208,11 @@ I ran 30 claims with known answers through the live system and scored the result
 | Cost per claim | about 3 cents | about 3.5 cents | under 15 cents |
 | Time per claim | median 46 s | median 64 s | under 120 s |
 
-The changes: a passage that fails its citation check is now left out instead of withholding the whole verdict; the agents aim for three different sites per verdict; and a passage that only reports an old belief was meant to stop counting as support. The first two worked. The third did not: two claims are still withheld because one such passage was filed as support, and that labelling step is the next thing to fix. The run also got slower, and more passages were rejected.
+The changes: a passage that fails its citation check is now left out instead of withholding the whole verdict; the agents aim for three different sites per verdict; and a passage that only reports an old belief was meant to stop counting as support. The first two worked. The third did not: two claims were still withheld because one such passage was filed as support. The run also got slower, and more passages were rejected.
 
-The set is small, made of well-known facts and myths, and the changes were chosen by looking at these same claims, so this is a behaviour check, not an accuracy claim. Every claim, every miss and the method are in [docs/SCORECARD.md](docs/SCORECARD.md).
+Because those changes were chosen by looking at the same 30 claims, I then scored the system on ten claims it had never been run on: all ten were right, with no rejected citations. That check also showed that a further attempt at the belief problem never took effect, and the claim it was written for ("The Sun orbits the Earth") was withheld a third time.
+
+The sets are small and made of well-known facts and myths, so this is a behaviour check, not an accuracy claim. Every claim, every miss and the method are in [docs/SCORECARD.md](docs/SCORECARD.md).
 
 ## Deployment
 
@@ -231,8 +233,9 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 
 ## What I would do next
 
-- Fix how a passage is filed as supporting or contradicting a claim: the scorecard's remaining misses come from that step.
-- Score the system on a fresh set of claims it was not tuned on.
+- Fix how a passage describing an old belief is filed: two attempts have not stopped "under the old model, X" counting as support for X.
+- Score the system on a larger set of harder claims: statistics, recent events and contested topics.
+- Extend the credibility lists, so that well-known medical and scientific organisations are not "unrated".
 - Rate sources from more than their address (author, date, citations), and judge whether two sites are really independent rather than only different.
 - Review accepted citations by hand on a larger reference set to measure precision.
 - Test real Reels with background music, fast speech and fast-changing text.
