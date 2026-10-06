@@ -14,6 +14,8 @@ function App() {
   const [inputType, setInputType] = useState('text');
   const [articleUrl, setArticleUrl] = useState('');
   const [videoFile, setVideoFile] = useState(null);
+  const [videoSource, setVideoSource] = useState('file');   // 'file' (upload) or 'link'
+  const [videoUrl, setVideoUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
@@ -72,16 +74,18 @@ function App() {
     try {
       const article = !demo && inputType === 'article';
       const video = !demo && inputType === 'video';
+      const link = video && videoSource === 'link';
+      const upload = video && !link;
       let body;
-      if (video) { body = new FormData(); body.append('file', videoFile); body.append('caption', caption.trim()); }
-      const response = await fetch(`${apiBase}/${demo ? 'demo' : video ? 'fact-check-video' : article ? 'fact-check-article' : 'fact-check'}`, {
+      if (upload) { body = new FormData(); body.append('file', videoFile); body.append('caption', caption.trim()); }
+      const response = await fetch(`${apiBase}/${demo ? 'demo' : link ? 'fact-check-video-link' : video ? 'fact-check-video' : article ? 'fact-check-article' : 'fact-check'}`, {
         method: demo ? 'GET' : 'POST',
-        ...(video && { body }),
-        ...(!demo && !video && {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(article ? {url: articleUrl.trim()} : {claim: claim.trim()})}),
+        ...(upload && { body }),
+        ...(!demo && !upload && {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(link ? {url: videoUrl.trim(), caption: caption.trim()} : article ? {url: articleUrl.trim()} : {claim: claim.trim()})}),
         signal: AbortSignal.timeout(demo ? 10000 : video ? 615000 : 345000),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : video ? 'Please choose an MP4, MOV or WebM video and a caption under 2,200 characters.' : article ? 'Please enter a public https:// article link.' : 'Please enter a claim between 1 and 5,000 characters.');
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : link ? 'Please paste a link to one public video and keep the caption under 2,200 characters.' : video ? 'Please choose an MP4, MOV or WebM video and a caption under 2,200 characters.' : article ? 'Please enter a public https:// article link.' : 'Please enter a claim between 1 and 5,000 characters.');
       if (!Array.isArray(data.claims) || !['live', 'demo'].includes(data.mode)) throw new Error('Unexpected response from the server. Try again.');
       setReport(data);
     } catch (err) {
@@ -115,18 +119,29 @@ function App() {
           <textarea id="claim" value={claim} maxLength={5000} required disabled={loading} rows={4} placeholder="Paste a factual statement you want to investigate…" aria-describedby="claim-help" onChange={event => setClaim(event.target.value)} />
           <div className="input-meta" id="claim-help"><span>Up to {config?.max_claims || 5} claims per report</span><span>{claim.length.toLocaleString()} / 5,000</span></div>
         </> : inputType === 'video' ? <>
-          <label htmlFor="video-file">Video file</label>
-          <input id="video-file" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" required disabled={loading} aria-describedby="video-help" onChange={event => setVideoFile(event.target.files?.[0] || null)} />
+          <div className="input-switch source-switch" role="group" aria-label="Where the video comes from">
+            <button type="button" className="small-button" aria-pressed={videoSource === 'file'} disabled={loading} onClick={() => setVideoSource('file')}>Upload a file</button>
+            <button type="button" className="small-button" aria-pressed={videoSource === 'link'} disabled={loading} onClick={() => setVideoSource('link')}>Paste a link</button>
+          </div>
+          {videoSource === 'link' ? <>
+            <label htmlFor="video-url">Video link</label>
+            <input id="video-url" type="url" value={videoUrl} maxLength={500} required disabled={loading} placeholder="https://www.instagram.com/reel/…" aria-describedby="video-help" onChange={event => setVideoUrl(event.target.value)} />
+          </> : <>
+            <label htmlFor="video-file">Video file</label>
+            <input id="video-file" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" required disabled={loading} aria-describedby="video-help" onChange={event => setVideoFile(event.target.files?.[0] || null)} />
+          </>}
           <label htmlFor="video-caption">Caption (optional)</label>
-          <textarea id="video-caption" value={caption} maxLength={2200} disabled={loading} rows={2} placeholder="Paste the post's caption if it makes claims…" onChange={event => setCaption(event.target.value)} />
-          <div className="input-meta" id="video-help"><span>MP4, MOV or WebM, up to 3 minutes and 100 MB</span><span>{caption.length.toLocaleString()} / 2,200</span></div>
-          {config && !config.video_ready && <p className="notice" role="note">{config.video_message}</p>}
+          <textarea id="video-caption" value={caption} maxLength={2200} disabled={loading} rows={2} placeholder={videoSource === 'link' ? "Leave empty to use the post's own caption…" : "Paste the post's caption if it makes claims…"} onChange={event => setCaption(event.target.value)} />
+          <div className="input-meta" id="video-help"><span>{videoSource === 'link' ? `One public video on ${(config?.video_link_sites || ['Instagram', 'TikTok', 'YouTube']).join(', ')}, up to 3 minutes` : 'MP4, MOV or WebM, up to 3 minutes and 100 MB'}</span><span>{caption.length.toLocaleString()} / 2,200</span></div>
+          {videoSource === 'link' && config?.video_link_ready && <p className="notice" role="note">Only use links to videos you are allowed to download. Private posts cannot be fetched.</p>}
+          {config && videoSource === 'link' && !config.video_link_ready && <p className="notice" role="note">{config.video_link_message}</p>}
+          {config && videoSource === 'file' && !config.video_ready && <p className="notice" role="note">{config.video_message}</p>}
         </> : <>
           <label htmlFor="article-url">Article link</label>
           <input id="article-url" type="url" value={articleUrl} maxLength={2000} required disabled={loading} placeholder="https://…" aria-describedby="article-help" onChange={event => setArticleUrl(event.target.value)} />
           <div className="input-meta" id="article-help"><span>A public news or blog page. Up to 3 central claims are checked.</span></div>
         </>}
-        <button disabled={loading || !(inputType === 'text' ? claim.trim() : inputType === 'video' ? videoFile && config?.video_ready : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'}</button>
+        <button disabled={loading || !(inputType === 'text' ? claim.trim() : inputType === 'video' ? (videoSource === 'link' ? videoUrl.trim() && config?.video_link_ready : videoFile && config?.video_ready) : articleUrl.trim()) || !config?.live_ready} type="submit">{loading ? 'Working…' : config?.live_ready ? 'Research this claim' : 'Live research needs API setup'}</button>
       </form>
       {config?.live_ready && <p className="notice">Verdicts are automated. Read the evidence before relying on one.</p>}
       {config?.spending?.stopped && <p className="notice withheld" role="note">Today's research limit has been reached. It resets at midnight UTC.</p>}

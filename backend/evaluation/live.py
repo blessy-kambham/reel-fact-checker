@@ -33,7 +33,7 @@ MAX_USD_CEILING = Decimal('1.00')
 MAX_SEARCH_CEILING = 50
 VALIDATION_MODEL = 'gpt-4.1-mini'
 # Every route that runs paid research must be traced; a test checks this against the app's routes.
-LIVE_PATHS = frozenset({'/fact-check', '/fact-check-article', '/fact-check-video'})
+LIVE_PATHS = frozenset({'/fact-check', '/fact-check-article', '/fact-check-video', '/fact-check-video-link'})
 
 class AuditProvider(Providers):
     def __init__(self, budget, trace):

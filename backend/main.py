@@ -20,10 +20,10 @@ from services.article import ArticleUnavailable, run_article_pipeline
 from services.demo import demo_report
 from services.history import History
 from services import access
-from tools import media
+from tools import media, video_link
 from tools.media import MediaRejected, MediaToolMissing
 from tools.transcribe import LocalWhisper, TranscriptionUnavailable
-from services.video import MAX_CAPTION_CHARS, run_video_pipeline
+from services.video import MAX_CAPTION_CHARS, run_video_link_pipeline, run_video_pipeline
 from agents.shared import MAX_STATEMENT_CLAIMS
 from services.pipeline import run_pipeline
 from tools.providers import Providers, ProviderFailure, missing_settings
@@ -71,6 +71,25 @@ def video_status():
     if not LocalWhisper.installed():
         return False, 'Video checks need local transcription. Run: pip install -r requirements-video.txt, then restart the backend.'
     return True, 'Video checks are available.'
+
+
+def video_link_status():
+    """Whether a video may be given as a link. Off unless the deployment turns it on: downloading from these
+    sites may be against their terms, so that is the operator's decision."""
+    ready, message = video_status()
+    if not ready:
+        return False, message
+    if os.getenv('ALLOW_VIDEO_LINKS', '').strip().lower() != 'true':
+        return False, 'Checking a video from a link is turned off on this copy. Upload the video file instead.'
+    if not video_link.installed():
+        return False, 'Checking a video from a link needs yt-dlp. Run: pip install -r requirements-video.txt, then restart the backend.'
+    return True, 'Paste a link to one public video. Only use videos you are allowed to download.'
+
+
+class VideoLinkRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    url: str = Field(min_length=1, max_length=video_link.MAX_LINK_CHARS)
+    caption: str = Field(default='', max_length=MAX_CAPTION_CHARS)
 
 
 class LoginRequest(BaseModel):
@@ -161,8 +180,10 @@ def config(request: Request):
         if spending['stopped']:
             message = "Today's spending limit has been reached. Live research resumes after midnight UTC."
     video_ready, video_message = video_status()
+    link_ready, link_message = video_link_status()
     return {'live_ready': ready, 'live_enabled': enabled, 'missing_settings': missing, 'max_claims': MAX_STATEMENT_CLAIMS,
             'spending': spending, 'message': message, 'video_ready': ready and video_ready, 'video_message': video_message,
+            'video_link_ready': ready and link_ready, 'video_link_message': link_message, 'video_link_sites': list(video_link.SITES),
             'auth': {'required': access.auth_required(), 'signed_in': access.valid_session(request.cookies.get(access.COOKIE))},
             'reports_per_hour': access.reports_per_hour(),
             'started_at': STARTED_AT, 'setting_states': setting_states()}
@@ -236,6 +257,19 @@ async def fact_check_video(request: Request, file: UploadFile = File(...), capti
                 target.write(chunk)
         # The upload is deleted when this block ends, whatever happens.
         return await run_live(request, lambda provider: run_video_pipeline(path, name, caption, provider, transcriber()), timeout=600)
+
+
+@app.post('/fact-check-video-link', response_model=Report, dependencies=[Depends(require_access)])
+async def fact_check_video_link(body: VideoLinkRequest, request: Request):
+    ready, message = video_link_status()
+    if not ready:
+        raise HTTPException(503, message)
+    try:
+        url = video_link.check_link(body.url)   # refused here, before any limit is spent or any request is made
+    except video_link.LinkRejected as exc:
+        raise HTTPException(422, str(exc))
+    # The download happens inside the guarded run: one at a time, rate-limited, and never without live research on.
+    return await run_live(request, lambda provider: run_video_link_pipeline(url, body.caption, provider, transcriber()), timeout=600)
 
 
 async def run_live(request, make_report, timeout=330):

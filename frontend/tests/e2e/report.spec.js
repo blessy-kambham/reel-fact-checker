@@ -142,6 +142,39 @@ test('video upload goes to the video route and shows what the video says', async
   expect(post.body).toContain('Did you know?');
 });
 
+test('a video link goes to the link route and the report shows where it came from', async ({ page }) => {
+  const link = 'https://www.instagram.com/reel/abc123/';
+  const calls = await mockBackend(page, { videoLink: (route, json) => json(200, report({
+    input_type: 'video', submitted_text: `Video link: ${link}`, source_url: link, coverage_status: 'passed' })) });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Video', exact: true }).click();
+  await page.getByRole('button', { name: 'Paste a link' }).click();
+  await expect(page.getByText('One public video on Instagram, TikTok, YouTube, up to 3 minutes')).toBeVisible();
+  await expect(page.getByText(/Only use links to videos you are allowed to download/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Research this claim/ })).toBeDisabled();
+  await page.getByLabel('Video link').fill(link);
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Your claim-by-claim report')).toBeVisible();
+  await expect(page.getByRole('link', { name: link })).toBeVisible();
+  const post = calls.find(c => c.path === '/fact-check-video-link');
+  expect(JSON.parse(post.body)).toEqual({ url: link, caption: '' });
+  expect(calls.some(c => c.path === '/fact-check-video')).toBe(false);
+});
+
+test('video links say when they are turned off and cannot be submitted', async ({ page }) => {
+  await mockBackend(page, { config: { ...liveConfig, video_link_ready: false,
+    video_link_message: 'Checking a video from a link is turned off on this copy. Upload the video file instead.' } });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Video', exact: true }).click();
+  await page.getByRole('button', { name: 'Paste a link' }).click();
+  await page.getByLabel('Video link').fill('https://www.instagram.com/reel/abc123/');
+  await expect(page.getByText(/turned off on this copy/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Research this claim/ })).toBeDisabled();
+  // Uploading still works.
+  await page.getByRole('button', { name: 'Upload a file' }).click();
+  await expect(page.getByLabel('Video file')).toBeVisible();
+});
+
 test('video mode explains missing tools and cannot be submitted', async ({ page }) => {
   await mockBackend(page, { config: { ...liveConfig, video_ready: false,
     video_message: 'Video checks need ffmpeg. On a Mac: brew install ffmpeg, then restart the backend.' } });

@@ -158,6 +158,7 @@ button:focus-visible { border-radius: 999px; }
   background: var(--bubblegum); border: 1.5px solid var(--rose); border-radius: 999px;
 }
 .input-switch .small-button { background: transparent; border-color: transparent; }
+.source-switch { margin-bottom: 14px; }
 .input-switch .small-button:hover:not(:disabled) { background: #ffe3ec; }
 .input-switch .small-button[aria-pressed=true] { background: var(--plum); color: #fff; border-color: var(--plum); }
 

@@ -4,6 +4,7 @@
 No custom models: ffmpeg, local Whisper and the configured OpenAI model's image input.
 """
 import hashlib
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from agents.shared import now
 from schemas import Report
 from services.article import select_and_research
 from services.summary import overall
+from tools import video_link
 from tools.fetcher import fetch_text
 
 MAX_CAPTION_CHARS = 2200  # Instagram's caption limit.
@@ -49,3 +51,18 @@ async def run_video_pipeline(path: Path, filename: str, caption: str, provider, 
     return Report(**base, intent=extraction.intent, note=extraction.note, claims=results, limitations=limitations,
                   agent_steps=steps + extractor_steps, **overall(results),
                   omitted_claims=extraction.omitted_claims, coverage_status='incomplete' if refused else 'passed')
+
+
+LINK_NOTE = ('The video was downloaded from the link for this check and deleted afterwards. '
+             "When no caption was typed, the post's own caption or description was used.")
+
+
+async def run_video_link_pipeline(url: str, caption: str, provider, transcriber, fetch=fetch_text,
+                                  download=video_link.download) -> Report:
+    """A video given as a link: download it, then exactly the pipeline an uploaded file goes through."""
+    with tempfile.TemporaryDirectory(prefix='reel-link-') as work:
+        got = await download(url, Path(work))
+        # A caption the person typed wins; otherwise the post's own caption, which uploads cannot supply.
+        report = await run_video_pipeline(got.path, got.title, (caption or '').strip() or got.caption, provider, transcriber, fetch)
+    return report.model_copy(update={'submitted_text': f'Video link: {got.url}'[:5000], 'source_url': got.url,
+                                     'limitations': report.limitations + [LINK_NOTE]})

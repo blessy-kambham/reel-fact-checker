@@ -39,6 +39,7 @@ docker run -d --name reel-fact-checker -p 8000:8000 \
 | `REUSE_DAYS` | no | Days a checked claim's result is shown again instead of being researched again (default 7). `0` turns reuse off. Reuse reads the history file, so it needs the volume. |
 | `TRUST_PROXY_HEADERS` | behind a proxy | `true` only when a trusted reverse proxy sets `X-Forwarded-For`; otherwise every visitor shares the proxy's address. |
 | `WHISPER_MODEL` | video only | Whisper size (default `small`); downloads once into `/data/models`. |
+| `ALLOW_VIDEO_LINKS` | no | `true` lets signed-in visitors give a video as an Instagram, TikTok or YouTube link, fetched with yt-dlp (installed with `WITH_VIDEO=true`). Off by default: those sites' terms may not allow downloading, so turn it on only for videos you have the right to download. Expect refusals from a cloud server; the site then asks for the file instead. |
 
 Set by the image, normally unchanged: `ENVIRONMENT=production`, `DATA_DIR=/data`, `FRONTEND_DIST=/app/frontend`,
 `COOKIE_SECURE=true`, `PORT=8000`.

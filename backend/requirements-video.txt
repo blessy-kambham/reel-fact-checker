@@ -1,5 +1,8 @@
 # Optional: local speech-to-text for video mode. Also needs ffmpeg (macOS: brew install ffmpeg).
 # The Whisper model (WHISPER_MODEL, default "small", about 0.5 GB) downloads on first use.
 faster-whisper==1.1.1
+# Optional within video mode: fetching a video from a link (ALLOW_VIDEO_LINKS). Sites change often, so this is
+# a minimum version, not a pin; update it when downloads start failing.
+yt-dlp>=2026.8.19
 # faster-whisper imports requests, which newer huggingface_hub no longer installs.
 requests>=2.31,<3
