@@ -70,6 +70,8 @@ After sources began to be rated by where they come from, I re-ran the Great Wall
 
 The run took 24 model calls, 2 searches, 53 seconds and about two cents. One of the unrated sites is a magazine from an established publisher that is not on the lists, which shows their limit: a site that is not listed is rated as unknown, not as poor.
 
+The ratings were later aligned with the design brief's eight categories and weights. That changed labels and source scores only: the same pages are accepted or refused as before, so the score of 60 above was computed with the earlier weights.
+
 ### Five statements in one submission
 
 After the limit for a typed submission was raised from three claims to five, I submitted five one-sentence statements together on 6 October, through the normal app.

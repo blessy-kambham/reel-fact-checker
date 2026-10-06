@@ -28,6 +28,7 @@ does not finish is left out, so it cannot cost a claim the evidence it already h
 Used by: `main.py` (statements), `services/article.py` (articles) and `services/video.py` (videos).
 """
 import asyncio
+import hashlib
 import time
 from uuid import uuid4
 
@@ -35,6 +36,7 @@ from schemas import Citation, ClaimResult, OrchestratorAction, Report
 from services.budget import BudgetExceeded
 from tools.fetcher import fetch_text
 from services.input_mapping import map_input
+from services.summary import confidence, overall
 from tools import credibility
 from tools.providers import ProviderFailure
 
@@ -43,8 +45,8 @@ from agents.citation_verifier import CitationVerifierAgent
 from agents.claim_extractor import ClaimExtractorAgent
 from agents.research_agent import ResearchAgent
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
-from agents.shared import (COMPLETE_WITHHELD_REASONS, FEW_SITES_NOTE, INVALID_REFERENCE_CODES, MAX_STATEMENT_CLAIMS,
-                           SINGLE_SOURCE_NOTE, SITE_GOAL, WITHHELD_MESSAGES, now, unresolved)
+from agents.shared import (COMPLETE_WITHHELD_REASONS, COPY_MARKER_MIN_WORDS, FEW_SITES_NOTE, INVALID_REFERENCE_CODES,
+                           MAX_STATEMENT_CLAIMS, SINGLE_SOURCE_NOTE, SITE_GOAL, WITHHELD_MESSAGES, loose, now, unresolved)
 from agents.verdict_agent import VerdictAgent
 
 NAME = 'Orchestrator'
@@ -110,7 +112,7 @@ def _rated(citation: Citation) -> Citation:
     if not citation.url:
         return citation
     rating = credibility.rate(citation.url)
-    return citation.model_copy(update={'source_tier': rating.tier, 'source_label': rating.label})
+    return citation.model_copy(update={'source_tier': rating.tier, 'source_label': rating.label, 'source_weight': rating.weight})
 
 
 class _Case:
@@ -377,7 +379,7 @@ class _Case:
         if withheld:
             warnings.append(WITHHELD_MESSAGES[withheld])
         incomplete = pack.search_failed or (withheld is not None and withheld not in COMPLETE_WITHHELD_REASONS)
-        verdict_sources, verdict_sites, strength, score = None, None, None, None
+        verdict_sources, verdict_sites, strength, score, level, reasons = None, None, None, None, None, []
         if withheld is None:
             cited = [c for c in usable if c.evidence_id in decision_ids]
             verdict_sources = len({c.url or c.source_id for c in cited})
@@ -390,6 +392,10 @@ class _Case:
                     warnings.append(SINGLE_SOURCE_NOTE)
                 elif verdict_sites < SITE_GOAL:
                     warnings.append(FEW_SITES_NOTE)
+                # Confidence looks at the same passages the site count does: the cited ones that bear on the claim.
+                direct_strength = credibility.assess(c.url for c in cited if c.stance in ('FOR', 'AGAINST'))[0]
+                level, reasons = confidence(verdict_sites, direct_strength, {'FOR', 'AGAINST'} <= {c.stance for c in usable},
+                                            rejected, len(usable) + rejected)
                 if strength == 'weak':
                     warnings.append(WEAK_SOURCES_NOTE)
         if not any(c.stance == 'AGAINST' for c in usable):
@@ -403,7 +409,8 @@ class _Case:
                            withheld_message=WITHHELD_MESSAGES[withheld] if withheld else None,
                            decision_verdict=decision_verdict, decision_evidence_ids=decision_ids,
                            verdict_evidence_ids=[] if withheld else decision_ids, verdict_source_count=verdict_sources,
-                           verdict_site_count=verdict_sites, evidence_strength=strength, source_score=score)
+                           verdict_site_count=verdict_sites, evidence_strength=strength, source_score=score,
+                           confidence=level, confidence_reasons=reasons)
 
 
 async def _direct(case: _Case) -> None:
@@ -508,14 +515,45 @@ async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(),
     return case.result()
 
 
+def claim_key(claim, copy_markers=()) -> str:
+    """A fingerprint of a claim as it was researched: its words, its context, and whether copies of the
+    checked material were being kept out of the evidence. Two claims with the same key are the same
+    question asked under the same rules."""
+    guarded = any(len(marker.split()) >= COPY_MARKER_MIN_WORDS for marker in copy_markers)
+    parts = [loose(claim.text), loose(claim.context), 'copies excluded' if guarded else '']
+    return hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()[:32]
+
+
+def reused(earlier: ClaimResult, report_id: str, checked_at: str, claim_text: str | None = None) -> ClaimResult:
+    """An earlier result for the same claim, marked as shown again rather than researched again. It carries
+    the claim as it was worded this time, which may differ from the earlier wording in case or spacing."""
+    day = checked_at[:10]
+    note = f'This claim was checked on {day}. That result is shown again; no new research was done.'
+    return earlier.model_copy(update={
+        'claim': claim_text or earlier.claim, 'reused_from': report_id, 'first_checked_at': checked_at, 'limitations': [note] + earlier.limitations,
+        'agent_steps': [f'{NAME}: Recognised a claim already checked on {day} and reused its result.'] + earlier.agent_steps})
+
+
 async def research_all(claims, provider, fetch=fetch_text, exclude=frozenset(), copy_markers=None):
-    """Run one research branch per claim, a few at a time; every failure becomes a named withheld verdict."""
+    """Run one research branch per claim, a few at a time; every failure becomes a named withheld verdict.
+
+    When the provider carries a `recall` function (the live app's history), a claim that was already
+    checked recently is not researched again: its earlier result is shown, marked as reused. This does
+    not apply when pages are excluded for this submission (an article's own page), because an earlier
+    result may rest on exactly those pages.
+    """
     limiter = asyncio.Semaphore(MAX_PARALLEL_CLAIMS)
+    recall = None if exclude else getattr(provider, 'recall', None)
     async def branch(claim):
+        markers = (copy_markers or {}).get(claim.text, ())
+        key = None if exclude else claim_key(claim, markers)
+        earlier = recall(key) if recall else None
+        if earlier is not None:
+            return reused(*earlier, claim.text)
         async with limiter:
             try:
-                markers = (copy_markers or {}).get(claim.text, ())
-                return await asyncio.wait_for(research_claim(claim, provider, fetch, exclude, markers), timeout=CLAIM_TIMEOUT_SECONDS)
+                result = await asyncio.wait_for(research_claim(claim, provider, fetch, exclude, markers), timeout=CLAIM_TIMEOUT_SECONDS)
+                return result.model_copy(update={'claim_key': key})
             except asyncio.TimeoutError:
                 return unresolved(claim.text, 'This claim exceeded its research time limit.', 'claim_timeout')
             except BudgetExceeded as exc:
@@ -579,4 +617,5 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
     limitations = [f'At most {MAX_STATEMENT_CLAIMS} claims are checked per report, with up to eight pages read per claim.']
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
                   note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, agent_steps=steps,
+                  **overall(results),
                   omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])

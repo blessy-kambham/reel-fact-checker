@@ -20,7 +20,7 @@ class Judge:
         if schema is VerdictDecision:
             return VerdictDecision(verdict='TRUE', evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
         if schema is EvidenceRelation:
-            return EvidenceRelation(relation='SUPPORTS', reason='Scripted relation')
+            return EvidenceRelation(voice='PAGE', relation='SUPPORTS', reason='Scripted relation')
         assert schema is CitationJudgment
         self.inputs.append(json.loads(data))
         return CitationJudgment(supports_attribution=self.approved, stance_matches=True, opposite_stance=False,reason='Scripted attribution check')

@@ -186,13 +186,18 @@ class AnalystAgent:
                 'in its region is IRRELEVANT, and one saying its surface stays liquid in January CONTRADICTS. '
                 'For target A hiker counted 412 steps on the fictional Arlo trail yesterday, a passage saying the trail has '
                 '900 steps is BACKGROUND, not CONTRADICTS. '
-                'A passage that only reports what a person, group, tradition, earlier era or superseded model believed, '
-                'claimed or assumed does not establish the target, unless the target is itself about what was believed or '
-                'claimed. It is SUPPORTS only when the page presents the assertion as fact in its own voice. When the page '
-                'presents the belief as superseded, disproved or mistaken, a passage saying so, or stating what is actually '
-                'the case, CONTRADICTS the target; a passage that merely describes the belief is BACKGROUND. '
+                'Also decide "voice": whose statement the passage is. PAGE means the page itself states it as fact, which '
+                'includes citing an authority it relies on. REPORTED means the page only describes it as something people '
+                'believe or once believed, a myth, a misconception, a superseded model, a rumour, an allegation or a '
+                'hypothetical; wording such as many believe, it was once thought, according to the myth or under the old '
+                'model marks it. A REPORTED passage does not establish the target and cannot be SUPPORTS. '
+                'A page that itself calls the target a myth, a misconception or disproved is stating in its own voice '
+                'that the target is false: that passage is PAGE and CONTRADICTS. '
+                'If the target is itself a statement about what people believe, say or once thought, a page stating that '
+                'they do is PAGE. '
                 'Example: for target The fictional Mount Arlo is hollow, a passage saying early settlers held that Mount '
-                'Arlo was hollow is BACKGROUND, and one saying that view was abandoned when surveys found solid rock CONTRADICTS. '
+                'Arlo was hollow is REPORTED; one saying it is a myth that Mount Arlo is hollow, or that surveys found '
+                'solid rock, is PAGE and CONTRADICTS. '
                 'Dates and times written differently (a weekday versus a calendar date, local time versus UTC, a planned '
                 'versus an actual date) are not contradictions unless they cannot both be true; when unsure, use UNCERTAIN. '
                 'Read the full page to preserve qualifications. Do not choose a verdict or infer a relationship '
@@ -200,6 +205,13 @@ class AnalystAgent:
                 json.dumps({'target_assertion': claim_text, 'quote': quote, 'page': source.text}))
             metadata['relation_reason'] = relation.reason
             stance = RELATION_TO_STANCE.get(relation.relation)
+            if relation.voice == 'REPORTED' and stance == 'FOR':
+                # What people believe, or once believed, is not evidence that it is so. The application applies
+                # this whatever relation the model gave. Only support is downgraded: a passage saying the target is
+                # a myth is the page contradicting it, and must not be lost if the model marks it as reported.
+                stance = 'CONTEXT'
+                metadata['relation_reason'] = (f'{relation.reason} [Treated as background: the page reports this as a '
+                                               'belief or an earlier view, not as fact.]')
             code = 'relation_unresolved'
             reason = 'Evidence relationship was irrelevant or uncertain; citation excluded.'
         except BudgetExceeded:

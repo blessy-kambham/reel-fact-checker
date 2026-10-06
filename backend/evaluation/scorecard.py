@@ -7,6 +7,10 @@
       Runs every case that has no saved result yet, three at a time, under a spending cap that
       persists with the results. Stopping and starting again continues where it left off.
 
+  --cases FILE   use another set of cases, for example `evaluation/scorecard_cases_fresh.json`, a
+                 set kept aside so that changes can be scored on claims they were not chosen from.
+  --only A,B     run only the cases with these IDs.
+
 Each case is one claim and the verdicts that count as right for it (`scorecard_cases.json`). The
 reference answer is never shown to the model. Results are written to
 `evaluation/results/scorecard-NAME/` and stay local; `summary.md` there is the table to publish.
@@ -106,7 +110,7 @@ def _percentile(values: list[float], share: float) -> float | None:
 
 def summarize(cases: list[dict], results: dict) -> dict:
     """Every number in the scorecard, from the saved result of each case."""
-    rows, passages, strengths, sites_cited = [], Counter(), Counter(), []
+    rows, passages, strengths, sites_cited, by_confidence = [], Counter(), Counter(), [], {}
     for case in cases:
         saved = results.get(case['id'])
         if saved is None:
@@ -128,6 +132,10 @@ def summarize(cases: list[dict], results: dict) -> dict:
                 row['sites_cited'] = len({credibility.domain(e.get('url')) for e in cited if credibility.domain(e.get('url'))})
                 sites_cited.append(row['sites_cited'])
                 strengths[claim.get('evidence_strength') or 'not rated'] += 1
+                if claim.get('confidence'):
+                    row['confidence'] = claim['confidence']
+                    tally = by_confidence.setdefault(claim['confidence'], {'right': 0, 'wrong': 0})
+                    tally['right' if row['outcome'] == 'correct' else 'wrong'] += 1
         rows.append(row)
 
     ran = [row for row in rows if row['outcome'] != 'error']
@@ -171,6 +179,8 @@ def summarize(cases: list[dict], results: dict) -> dict:
         'verdicts_citing_three_or_more_sites': sum(n >= SITE_GOAL for n in sites_cited),
         'verdicts_citing_one_site': sum(n == 1 for n in sites_cited), 'verdicts_with_sites_counted': len(sites_cited),
         'source_strength': dict(sorted(strengths.items())),
+        # Does the confidence level mean anything? Right and wrong verdicts at each level.
+        'verdicts_by_confidence': {level: by_confidence[level] for level in ('high', 'medium', 'low') if level in by_confidence},
         'if_failed_citations_were_dropped': {'accuracy': share(relaxed_correct, len(ran)), 'wrong': relaxed_wrong,
                                              'cases_that_would_change': changed},
         'targets': TARGETS, 'results': rows,
@@ -208,6 +218,9 @@ def markdown(summary: dict, name: str = '') -> str:
              f"| Verdicts citing three or more sites | {s['verdicts_citing_three_or_more_sites']} of {s['verdicts_with_sites_counted']} | all | "
              f"{met(s['verdicts_citing_three_or_more_sites'] == s['verdicts_with_sites_counted'] if s['verdicts_with_sites_counted'] else None)} |",
              '']
+    if s.get('verdicts_by_confidence'):
+        lines += ['Verdicts by confidence level: ' + '; '.join(
+            f"{level}: {tally['right']} right, {tally['wrong']} wrong" for level, tally in s['verdicts_by_confidence'].items()) + '.', '']
     what_if = s['if_failed_citations_were_dropped']
     if what_if['cases_that_would_change']:
         lines += [f"If a failed citation were dropped instead of withholding the verdict: accuracy {pct(what_if['accuracy'])}, "
@@ -316,8 +329,15 @@ def main(argv=None):
     parser.add_argument('--name', help='Name of the run; results and its spending cap are kept under it.')
     parser.add_argument('--max-usd', type=Decimal, help='Model spending cap for this run.')
     parser.add_argument('--max-searches', type=int, default=150, help='Search cap for this run.')
+    parser.add_argument('--cases', type=Path, default=CASES, help='Cases file (default: scorecard_cases.json).')
+    parser.add_argument('--only', default='', help='Comma-separated case IDs to run; the rest are left out.')
     args = parser.parse_args(argv)
-    cases = load_cases()
+    cases = load_cases(args.cases)
+    wanted = {name.strip() for name in args.only.split(',') if name.strip()}
+    if wanted - {case['id'] for case in cases}:
+        parser.error('Unknown case IDs: ' + ', '.join(sorted(wanted - {case['id'] for case in cases})))
+    if wanted:
+        cases = [case for case in cases if case['id'] in wanted]
     if not args.allow_paid:
         print(f'{len(cases)} cases: ' + ', '.join(f'{count} {verdict}' for verdict, count in Counter(c['expected'] for c in cases).items()))
         for directory in sorted(RESULTS.glob('scorecard-*')):

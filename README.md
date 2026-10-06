@@ -9,7 +9,9 @@ I built this as a portfolio project to explore a question I care about: how do y
 - **Three kinds of input.** A typed statement, a public article URL, or an uploaded video (MP4, MOV or WebM, up to 3 minutes).
 - **Video understanding.** Speech is transcribed locally with Whisper, on-screen text is read from keyframes, and an optional caption is included, so a silent Reel with text overlays works too.
 - **Claim-by-claim reports.** Up to five claims from a typed submission, or the three central claims of an article or video, each with a verdict (`TRUE`, `FALSE`, `PARTIALLY TRUE`, `MISLEADING`, `OUTDATED` or `UNVERIFIABLE`), the passages the verdict rests on, and links to their sources.
-- **Source credibility.** Every page is rated by where it comes from (official or academic, established publisher, unrated, social media). Social media pages are never used as evidence, and each verdict shows how strong its sources are and how many different sites it rests on.
+- **Source credibility.** Every page is rated by where it comes from, in the design brief's categories and weights (government data 0.95, peer-reviewed 0.90, fact-checkers 0.88, down to social media 0.10). Social media and blogs are never used as evidence, and each verdict shows how strong its sources are and how many different sites it rests on.
+- **Confidence and an overall verdict.** Each verdict carries a confidence level (high, medium or low) with the reasons for it, and a submission with several claims gets one overall verdict. Both are counting rules, not a model's opinion.
+- **Repeated claims are not researched twice.** A claim already checked in the last seven days is shown again from the saved result, marked as reused.
 - **Verdicts can be withheld.** If sources cannot be read, a check could not be run, or the evidence conflicts, the report gives the reason instead of a verdict.
 - **Saved reports.** Live reports are stored in SQLite and can be reopened, printed, saved as PDF or downloaded as JSON.
 - **A free demo mode.** A fictional example report that needs no API keys and makes no external calls.
@@ -54,7 +56,10 @@ These are the choices that shaped the project, most of them made after a live te
 - **Withhold rather than guess.** Each claim reports whether its verdict was issued or withheld, with a specific reason such as `no_sources`, `citation_unchecked` or `conflicting_evidence`. A verdict resting on a single page, or on fewer than three sites, is flagged.
 - **A failed citation is left out, not fatal.** A passage that fails its citation check is listed as rejected and the verdict rests on the passages that passed. Until the scorecard measured it, one failed citation withheld the whole verdict, which cost correct answers without preventing a wrong one. Two cases still withhold: a check that could not be run, and a passage the citation verifier places on the other side of the claim from the analyst, because leaving that one out could hide evidence against the verdict.
 - **Three sites is a goal, not a gate.** The analyst is asked to spread its selections over different sites, and a claim whose verified evidence comes from fewer than three gets one more research round that looks beyond the sites already used. If that finds nothing, the verdict is still issued and says how many sites it rests on. Sections of one organisation's site (`en.wikipedia.org`, `simple.wikipedia.org`) count as one.
-- **Credibility is a stated rule, not a guess.** Sources are rated from their web address against short, published lists in [`backend/tools/credibility.py`](backend/tools/credibility.py). The rating keeps social media out of the evidence and labels each verdict's sources as strong, moderate or weak, but it never changes a verdict and is not presented as the chance that a verdict is right.
+- **Credibility is a stated rule, not a guess.** Sources are rated from their web address against short, published lists in [`backend/tools/credibility.py`](backend/tools/credibility.py), using the eight categories and weights of the design brief plus "unrated" for the rest of the web. The rating keeps social media and blogs out of the evidence and labels each verdict's sources as strong, moderate or weak, but it never changes a verdict and is not presented as the chance that a verdict is right.
+- **Confidence is a level, not a percentage.** The brief asks for a confidence percentage. Thirty scored claims cannot support one, so each verdict gets high, medium or low from things that can be counted: how many sites back it, what kind of sites they are, whether verified evidence points both ways, and how many selected passages failed their check. The reasons are shown with the level ([`backend/services/summary.py`](backend/services/summary.py)).
+- **A belief is not evidence.** "Many believe X" and "under the old model, X" are true sentences that do not support X. The check that files each passage as support or contradiction also says whose voice the passage is in, and the application treats a reported belief as background whatever the model filed it as.
+- **Reuse goes back to the original.** A repeated claim is recognised by its words and context, not by meaning, and only a real verdict issued on complete research is reused. A reused result is never itself reused, so nothing outlives its seven days, and deleting the original report makes the claim be researched again.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
 - **Blocked pages fall back transparently.** When a site refuses the app's fetcher, the search provider's extracted text for that page is used instead, and the report labels that evidence.
 - **Spending is capped before it happens.** Every model and search call reserves its worst-case cost against a daily ledger before it runs and is reconciled afterwards. When the cap is reached, research stops for the day.
@@ -89,7 +94,7 @@ backend/
     providers.py         OpenAI and Tavily adapters
     fetcher.py           safe page fetching
     excerpts.py          numbered excerpts with character offsets
-    credibility.py       source ratings and evidence strength
+    credibility.py       source categories, weights and evidence strength
     media.py             ffmpeg validation, audio and keyframe extraction
     transcribe.py        local Whisper transcription
   services/              application plumbing
@@ -97,7 +102,8 @@ backend/
     article.py, video.py article and video entry points, verbatim claim checks
     input_mapping.py     verbatim mapping of claims to the input
     budget.py            spending reservations and the daily ledger
-    history.py           saved reports (SQLite)
+    history.py           saved reports (SQLite); finds a claim checked before
+    summary.py           confidence level and overall verdict
     access.py            password sign-in, sessions, rate limits
   evaluation/            offline policy cases, the live validation runner and the scorecard
   tests/                 offline tests with scripted providers
@@ -140,6 +146,7 @@ Live research needs an OpenAI API key and a Tavily key, and it costs money (a ch
 | `APP_PASSWORD`, `SESSION_SECRET` | Password sign-in; required in production |
 | `REPORTS_PER_HOUR` | Per-person limit; default 10 |
 | `AGENT_MODE` | `autonomous` (default): every agent plans its own steps. `fixed`: each agent does one standard pass. Or a list of agent names, such as `research,verdict` |
+| `REUSE_DAYS` | Days a checked claim's result is shown again instead of researched again; default 7, `0` turns reuse off |
 | `WHISPER_MODEL` | Whisper size for video; default `small` |
 
 Never commit `.env` files or keys.
@@ -173,10 +180,10 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 478 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 563 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
-npx playwright install chromium && npm run test:e2e   # 17 browser tests, mocked backend
+npx playwright install chromium && npm run test:e2e   # 19 browser tests, mocked backend
 ```
 
 The backend tests use scripted providers, so they run offline and cost nothing. They cover input validation, claim mapping, citation checks, verdict gating, spending limits, history, access control, article and video ingestion, the safe fetcher, source ratings, and each agent's choices together with the limits on them. The policy cases pin down how the pipeline must behave in specific situations, such as invented source IDs, misattributed quotes, search outages and conflicting evidence. GitHub Actions runs the backend tests, the policy cases and the frontend build on every push.
@@ -214,6 +221,8 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 - This is a demo, not a fact-checking service. Verdicts are automated and can be wrong; read the evidence.
 - The scorecard and live validation sets are small and made of well-known claims. They show the system working on specific cases, not a measured accuracy rate.
 - Source credibility is a simple rule: sites are rated from short lists of known addresses, so most of the web is "unrated", and the rating says nothing about a particular page's accuracy. Three different sites per verdict is aimed for, not required.
+- The confidence level is a rule over the evidence, not a measured probability, and the overall verdict is a count of the claims' verdicts.
+- A repeated claim is recognised only when its wording and context match. The same claim in different words is researched again.
 - The same model performs analysis and checking in separate calls, so correlated mistakes are possible.
 - Only HTML and plain-text pages are read. PDFs, paywalled pages and pages that need JavaScript are skipped.
 - Video needs a file upload. Instagram offers no official way to download other people's Reels, so pasting a Reel link is not supported.

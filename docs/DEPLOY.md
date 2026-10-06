@@ -36,6 +36,7 @@ docker run -d --name reel-fact-checker -p 8000:8000 \
 | `DAILY_BUDGET_USD`, `DAILY_SEARCH_LIMIT` | no | Daily caps (defaults 0.50 and 40). |
 | `REPORTS_PER_HOUR` | no | Per-person report limit (default 10). |
 | `AGENT_MODE` | no | `autonomous` (default) lets every agent plan its own steps. `fixed` makes each agent do one standard pass, which uses fewer model calls. A list such as `research,verdict` turns planning on for those agents only. |
+| `REUSE_DAYS` | no | Days a checked claim's result is shown again instead of being researched again (default 7). `0` turns reuse off. Reuse reads the history file, so it needs the volume. |
 | `TRUST_PROXY_HEADERS` | behind a proxy | `true` only when a trusted reverse proxy sets `X-Forwarded-For`; otherwise every visitor shares the proxy's address. |
 | `WHISPER_MODEL` | video only | Whisper size (default `small`); downloads once into `/data/models`. |
 

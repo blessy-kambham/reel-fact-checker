@@ -31,6 +31,7 @@ TOOLS = {
 }
 
 JUDGMENT_INSTRUCTIONS = (
+    'Write "reason" first, then answer consistently with what you wrote. '
     'Make two separate judgments. First, supports_attribution: does the quoted passage, read in the full page context, '
     'support the attributed STATEMENT without distortion? This is about the statement, not whether it proves the original claim. '
     'Second, stance_matches: does the supported statement have the assigned relationship to the ORIGINAL CLAIM? '

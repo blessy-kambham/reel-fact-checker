@@ -41,7 +41,7 @@ class FixtureProvider:
         if schema is EvidenceRelation:
             item = self.case['candidate']['evidence'][self.relations]
             self.relations += 1
-            return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item['stance']], reason='Scripted relation')
+            return EvidenceRelation(voice='PAGE', relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item['stance']], reason='Scripted relation')
         if schema is CitationJudgment:
             self.judgments += 1
             approved = json.loads(data)['statement'] not in self.case.get('rejected_statements', [])

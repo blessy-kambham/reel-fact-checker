@@ -24,7 +24,7 @@ class Scripted(FakeProvider):
         if schema is EvidenceRelation:
             draft = self.drafts[self.relations]
             self.relations += 1
-            return EvidenceRelation(relation=RELATIONS[draft.stance], reason='Scripted relation')
+            return EvidenceRelation(voice='PAGE', relation=RELATIONS[draft.stance], reason='Scripted relation')
         if schema is VerdictDecision:
             self.verdict_inputs.append(json.loads(data))
             if isinstance(self.decision, BaseException):
@@ -261,8 +261,8 @@ def test_prompts_separate_a_reported_belief_from_a_statement_of_fact():
             prompts[schema.__name__] = instructions
             return await super().structured(schema, instructions, data)
     check(Capture())
-    assert 'only reports what a person, group, tradition, earlier era or superseded model believed' in prompts['EvidenceRelation']
-    assert 'unless the target is itself about what was believed' in prompts['EvidenceRelation']
+    assert 'REPORTED means the page only describes it as something people believe or once believed' in prompts['EvidenceRelation']
+    assert 'If the target is itself a statement about what people believe' in prompts['EvidenceRelation']
     assert 'which the page does not present as fact is not FOR' in prompts['CitationJudgment']
     # The analyst is asked to spread its selections over sites rather than quote one page several times.
     assert 'at least three different sites and at most two excerpts from any one page' in prompts['Analysis']
@@ -280,7 +280,7 @@ def test_off_topic_pick_is_ignored_but_an_unavailable_relation_check_still_withh
                 self.relations += 1
                 if self.outcome == 'fail':
                     raise ProviderFailure('unavailable')
-                return EvidenceRelation(relation='IRRELEVANT', reason='About something else')
+                return EvidenceRelation(voice='PAGE', relation='IRRELEVANT', reason='About something else')
             return await super().structured(schema, instructions, data)
     decision = VerdictDecision(verdict='TRUE', evidence_ids=['E1'])
     ignored = check(Relation('irrelevant', decision=decision, drafts=[DRAFT, off_topic]))

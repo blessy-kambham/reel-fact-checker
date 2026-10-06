@@ -11,6 +11,7 @@ from agents.content_extractor import ContentExtractorAgent, compose  # noqa: F40
 from agents.shared import now
 from schemas import Report
 from services.article import select_and_research
+from services.summary import overall
 from tools.fetcher import fetch_text
 
 MAX_CAPTION_CHARS = 2200  # Instagram's caption limit.
@@ -46,5 +47,5 @@ async def run_video_pipeline(path: Path, filename: str, caption: str, provider, 
         limitations.append(f'{context_dropped} claim(s) were checked without surrounding context, because the context '
                            'supplied was not found word for word in the video.')
     return Report(**base, intent=extraction.intent, note=extraction.note, claims=results, limitations=limitations,
-                  agent_steps=steps + extractor_steps,
+                  agent_steps=steps + extractor_steps, **overall(results),
                   omitted_claims=extraction.omitted_claims, coverage_status='incomplete' if refused else 'passed')

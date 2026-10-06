@@ -1,0 +1,12 @@
+[
+  {"id": "heart", "claim": "The human heart has four chambers.", "expected": "TRUE", "accepted": ["TRUE"]},
+  {"id": "jupiter", "claim": "Jupiter is the largest planet in the Solar System.", "expected": "TRUE", "accepted": ["TRUE"]},
+  {"id": "kilimanjaro", "claim": "Mount Kilimanjaro is in Tanzania.", "expected": "TRUE", "accepted": ["TRUE"]},
+  {"id": "nile", "claim": "The Nile flows north into the Mediterranean Sea.", "expected": "TRUE", "accepted": ["TRUE"]},
+  {"id": "knuckles", "claim": "Cracking your knuckles causes arthritis.", "expected": "FALSE", "accepted": ["FALSE"]},
+  {"id": "sugar", "claim": "Sugar makes children hyperactive.", "expected": "FALSE", "accepted": ["FALSE"]},
+  {"id": "shaving", "claim": "Shaving makes hair grow back thicker.", "expected": "FALSE", "accepted": ["FALSE"]},
+  {"id": "ostriches", "claim": "Ostriches bury their heads in the sand when they are frightened.", "expected": "FALSE", "accepted": ["FALSE"]},
+  {"id": "flat-earth", "claim": "The Earth is flat.", "expected": "FALSE", "accepted": ["FALSE"]},
+  {"id": "tongue-map", "claim": "Each basic taste is detected only on its own separate region of the tongue.", "expected": "FALSE", "accepted": ["FALSE", "MISLEADING"]}
+]

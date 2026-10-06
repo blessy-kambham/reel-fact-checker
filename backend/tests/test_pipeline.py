@@ -33,7 +33,7 @@ class FakeProvider:
         if schema is VerdictDecision:
             return VerdictDecision(verdict=self.verdict, evidence_ids=[e['id'] for e in json.loads(data)['verified_evidence']])
         if schema is EvidenceRelation:
-            return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[self.draft.stance], reason='Scripted relation')
+            return EvidenceRelation(voice='PAGE', relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[self.draft.stance], reason='Scripted relation')
         self.verifier_calls += 1
         return CitationJudgment(supports_attribution=self.approved, stance_matches=True, opposite_stance=False, reason='Test judgment')
 

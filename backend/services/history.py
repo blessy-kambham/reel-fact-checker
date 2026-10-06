@@ -2,13 +2,16 @@
 
 Each live report is stored whole as JSON, the source of truth for re-display, plus
 queryable rows for claims and citations. Nothing is sent anywhere; the file stays on this machine.
+
+The claim rows also let a repeated claim be recognised: `find_claim` returns the result an
+identical claim received in an earlier report, so it can be shown again without new research.
 """
 import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-from schemas import Report
+from schemas import ClaimResult, Report
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS reports (
@@ -30,6 +33,7 @@ CREATE TABLE IF NOT EXISTS claims (
     verdict_state TEXT NOT NULL,
     withheld_reason TEXT,
     status TEXT NOT NULL,
+    claim_key TEXT,
     PRIMARY KEY (report_id, position)
 );
 CREATE TABLE IF NOT EXISTS citations (
@@ -59,6 +63,13 @@ class History:
         db = sqlite3.connect(self.path)
         db.execute('PRAGMA foreign_keys = ON')
         db.executescript(SCHEMA)
+        # Histories created before repeated claims were recognised have no key column yet.
+        if 'claim_key' not in {row[1] for row in db.execute('PRAGMA table_info(claims)')}:
+            try:
+                db.execute('ALTER TABLE claims ADD COLUMN claim_key TEXT')
+            except sqlite3.OperationalError:
+                pass  # another request opening the same history added it first
+        db.execute('CREATE INDEX IF NOT EXISTS claims_key ON claims(claim_key)')
         return db
 
     def save(self, report: Report) -> None:
@@ -70,8 +81,11 @@ class History:
             db.execute('DELETE FROM claims WHERE report_id = ?', (report.id,))
             db.execute('DELETE FROM citations WHERE report_id = ?', (report.id,))
             for position, claim in enumerate(report.claims):
-                db.execute('INSERT INTO claims VALUES (?, ?, ?, ?, ?, ?, ?)', (
-                    report.id, position, claim.claim, claim.verdict, claim.verdict_state, claim.withheld_reason, claim.status))
+                # A result shown again is not stored under its key, so reuse always goes back to the original check
+                # and cannot outlive it.
+                db.execute('INSERT INTO claims VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (
+                    report.id, position, claim.claim, claim.verdict, claim.verdict_state, claim.withheld_reason, claim.status,
+                    None if claim.reused_from else claim.claim_key))
                 used = set(claim.verdict_evidence_ids) if claim.verdict_state == 'issued' else set()
                 for accepted, citations in ((1, claim.evidence), (0, claim.rejected_citations)):
                     for c in citations:
@@ -96,6 +110,21 @@ class History:
         with closing(self._connect()) as db:
             row = db.execute('SELECT report_json FROM reports WHERE id = ?', (report_id,)).fetchone()
         return Report.model_validate(json.loads(row[0])) if row else None
+
+    def find_claim(self, key: str, since: str):
+        """The newest result an identical claim received in a report created at or after `since` (an ISO
+        timestamp), as (result, report ID, report time), or None. Only a real verdict issued on complete
+        research is returned: a withheld verdict, or an answer of UNVERIFIABLE, is worth researching again."""
+        with closing(self._connect()) as db:
+            row = db.execute(
+                'SELECT r.report_json, c.position, r.id, r.created_at FROM claims c JOIN reports r ON r.id = c.report_id '
+                "WHERE c.claim_key = ? AND c.verdict_state = 'issued' AND c.verdict != 'UNVERIFIABLE' "
+                "AND c.status = 'complete' AND r.mode = 'live' "
+                'AND r.created_at >= ? ORDER BY r.created_at DESC LIMIT 1', (key, since)).fetchone()
+        if row is None:
+            return None
+        claims = json.loads(row[0]).get('claims', [])
+        return (ClaimResult.model_validate(claims[row[1]]), row[2], row[3]) if row[1] < len(claims) else None
 
     def delete(self, report_id: str) -> bool:
         with closing(self._connect()) as db, db:

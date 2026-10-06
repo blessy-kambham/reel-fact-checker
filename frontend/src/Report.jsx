@@ -8,7 +8,7 @@ function Evidence({ item, demo, cited }) {
     <blockquote>{item.quote}</blockquote>
     {item.url?.startsWith('https://') ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a> : <strong>{item.title}</strong>}
     <p className="verification">{demo ? 'Demo fixture' : item.verified ? 'Quote and attribution checked' : 'Unverified'} · {item.verification}</p>
-    {item.source_label && <p className={`verification source-type source-${item.source_tier}`}>Source type: {item.source_label}</p>}
+    {item.source_label && <p className={`verification source-type source-${item.source_tier}`}>Source type: {item.source_label}{item.source_weight != null && ` · credibility weight ${item.source_weight.toFixed(2)}`}</p>}
     {item.retrieval === 'search_copy' && <p className="verification">Page text from the search provider's copy (the site refused a direct fetch).</p>}
   </article>;
 }
@@ -66,6 +66,10 @@ export default function Report({ report }) {
     {report.omitted_claims && !report.coverage_status && <p className="notice" role="alert">Incomplete coverage: some assertions were omitted. Verdicts are withheld. Submit each assertion separately.</p>}
     {report.note && <p className="notice">{report.note}</p>}
     <p className="report-meta">{new Date(report.created_at).toLocaleString()}, {report.claims.length} {report.claims.length === 1 ? 'claim' : 'claims'} checked</p>
+    {report.mode !== 'demo' && report.overall_verdict && <p className="overall-verdict" role="note">
+      <span className="overall-label">Overall</span>
+      <span className={`verdict verdict-${report.overall_verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.overall_verdict}</span>
+      <span className="overall-summary">{report.overall_summary}</span></p>}
     <AgentSteps steps={report.agent_steps} label="How the agents prepared this report" />
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}
     {report.claims.map((claim, index) => <article className="claim-result" key={index}>
@@ -74,6 +78,11 @@ export default function Report({ report }) {
       <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'Example: ' : ''}{claim.verdict}</span>
       {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
       {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
+      {report.mode !== 'demo' && claim.reused_from && <p className="notice reused" role="note"><strong>Checked before.</strong> This claim was checked on {new Date(claim.first_checked_at).toLocaleDateString()}. That result is shown again; no new research was done.</p>}
+      {report.mode !== 'demo' && claim.confidence && <p className={`confidence confidence-${claim.confidence}`}>
+        <strong>Confidence: {claim.confidence}</strong>
+        {claim.confidence_reasons?.length > 0 && <> — {claim.confidence_reasons.join('; ')}.</>}
+        <span> A rule based on the evidence, not a measured probability.</span></p>}
       {report.mode !== 'demo' && claim.evidence_strength && <p className={`source-strength strength-${claim.evidence_strength}`}>
         <strong>Source strength: {claim.evidence_strength}</strong> · source score {claim.source_score}/100
         {claim.verdict_site_count != null && <> · {claim.verdict_site_count} {claim.verdict_site_count === 1 ? 'site' : 'different sites'} cited (goal: 3)</>}

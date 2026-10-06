@@ -80,7 +80,8 @@ class Team(FakeProvider):
             relation = self.relations.pop(0)
             if isinstance(relation, BaseException):
                 raise relation
-            return EvidenceRelation(relation=relation, reason='Scripted relation')
+            relation, voice = relation if isinstance(relation, tuple) else (relation, 'PAGE')
+            return EvidenceRelation(voice=voice, relation=relation, reason='Scripted relation')
         if schema in (VerdictDecision, CitationJudgment):
             self.seen[schema].append(json.loads(data))
         return await super().structured(schema, instructions, data)
@@ -289,6 +290,32 @@ def test_a_passage_that_fails_its_check_is_left_out_and_the_rest_decide():
     assert result.verdict == 'TRUE' and result.verdict_state == 'issued' and result.status == 'complete'
     assert [c.verification_code for c in result.rejected_citations] == ['attribution_rejected']
     assert provider.seen[VerdictDecision][0]['verified_evidence'][0]['id'] == 'E1' and len(result.evidence) == 1
+
+
+def test_a_reported_belief_is_background_whatever_relation_the_model_gave():
+    """'Many believe X' is not evidence for X. One such passage must not make clear evidence look split."""
+    belief = SECOND.model_copy(update={'stance': 'FOR'})
+    against = DRAFT.model_copy(update={'stance': 'AGAINST'})
+    provider = Team('orchestrator', ROUTE, verdict='FALSE', analyses=[[against, belief]],
+                    relations=['CONTRADICTS', ('SUPPORTS', 'REPORTED')])
+    result = run(provider)
+    assert [(e.stance, e.proposed_stance) for e in result.evidence] == [('AGAINST', 'AGAINST'), ('CONTEXT', 'FOR')]
+    assert result.evidence[1].relation_reason.endswith('[Treated as background: the page reports this as a belief or an earlier view, not as fact.]')
+    assert result.verdict == 'FALSE' and result.verdict_state == 'issued'
+
+
+def test_a_reported_belief_alone_is_no_evidence():
+    result = run(Team('fixed', relations=[('SUPPORTS', 'REPORTED')]))
+    assert result.withheld_reason == 'no_relevant_evidence' and result.evidence[0].stance == 'CONTEXT'
+
+
+def test_a_contradiction_is_kept_even_when_the_model_marks_it_as_reported():
+    """'It is a myth that X' is the page contradicting X. If the model files a debunking under REPORTED,
+    the evidence against the claim must not be lost."""
+    provider = Team('fixed', verdict='FALSE', draft=DRAFT.model_copy(update={'stance': 'AGAINST'}),
+                    relations=[('CONTRADICTS', 'REPORTED')])
+    result = run(provider)
+    assert result.verdict == 'FALSE' and [e.stance for e in result.evidence] == ['AGAINST']
 
 
 class OneJudgment(Team):
@@ -543,6 +570,20 @@ def test_background_passages_are_not_counted_as_sites_behind_the_verdict(three_s
     result = run(provider)
     assert result.verdict_evidence_ids == ['E1', 'E2'] and result.verdict_source_count == 2
     assert result.verdict_site_count == 1 and orchestrator.FEW_SITES_NOTE in result.limitations
+
+
+def test_confidence_is_judged_on_the_passages_that_bear_on_the_claim():
+    """One unrated site says so; two rated sites only give background. The rated ones must not lend it confidence."""
+    class Mixed(Team):
+        async def search(self, query):
+            self.queries.append(query)
+            return ([{'url': 'https://example.org/claim', 'title': 'Unrated'}, {'url': 'https://www.nasa.gov/background', 'title': 'Official'}]
+                    if len(self.queries) == 1 else [{'url': 'https://www.britannica.com/background', 'title': 'Reference'}])
+    background = [on(source).model_copy(update={'stance': 'CONTEXT'}) for source in ('S2', 'S3')]
+    result = run(Mixed('fixed', analyses=[[on('S1')] + background], relations=['SUPPORTS', 'BACKGROUND', 'BACKGROUND']))
+    assert result.verdict == 'TRUE' and result.verdict_evidence_ids == ['E1', 'E2', 'E3'] and result.evidence_strength == 'strong'
+    assert result.confidence == 'low' and result.confidence_reasons == [
+        'it rests on a single site', 'none of them is an official, academic or established source']
 
 
 def test_fixed_mode_is_one_pass_and_reports_the_number_of_sites(three_sites):

@@ -23,7 +23,39 @@ from tests.test_pipeline import CLAIM, DRAFT, PAGE, FakeProvider
     ('https://example.org/report', 'unrated'), ('https://beijing-travels.com/wall', 'unrated'),
 ])
 def test_pages_are_rated_by_where_they_come_from(url, tier):
-    assert rate(url).tier == tier and rate(url).label == credibility.TIERS[tier].label
+    assert rate(url).tier == tier and rate(url).tier == credibility.CATEGORIES[rate(url).category].tier
+
+
+@pytest.mark.parametrize('url,category,weight', [
+    # The eight categories and weights of the design brief, with one of its own examples for each.
+    ('https://www.imf.org/en/Data', 'government', 0.95), ('https://www.census.gov/data', 'government', 0.95),
+    ('https://www.who.int/data', 'government', 0.95), ('https://www.health.govt.nz/a', 'government', 0.95),
+    ('https://pubmed.ncbi.nlm.nih.gov/123/', 'academic', 0.90), ('https://www.thelancet.com/article', 'academic', 0.90),
+    ('https://www.mit.edu/research', 'academic', 0.90), ('https://www.ox.ac.uk/news', 'academic', 0.90),
+    ('https://fullfact.org/health/x', 'fact_checker', 0.88), ('https://www.politifact.com/x', 'fact_checker', 0.88),
+    ('https://www.reuters.com/world', 'wire_service', 0.82), ('https://apnews.com/article/x', 'wire_service', 0.82),
+    ('https://www.nytimes.com/2026/x', 'news', 0.75), ('https://www.theguardian.com/world', 'news', 0.75),
+    ('https://www.britannica.com/topic', 'news', 0.75),
+    ('https://en.wikipedia.org/wiki/Moon', 'wikipedia', 0.55),
+    ('https://someone.substack.com/p/post', 'blog', 0.30), ('https://medium.com/@a/post', 'blog', 0.30),
+    ('https://x.com/someone/status/1', 'social_media', 0.10), ('https://www.facebook.com/page', 'social_media', 0.10),
+    # Not in the brief's table: the rest of the web.
+    ('https://example.org/report', 'unrated', 0.50),
+])
+def test_categories_and_weights_follow_the_design_brief(url, category, weight):
+    rating = rate(url)
+    assert (rating.category, rating.weight) == (category, weight) and rating is credibility.CATEGORIES[category]
+
+
+def test_weights_fall_from_primary_sources_to_social_media():
+    weights = [rating.weight for rating in credibility.CATEGORIES.values()]
+    assert weights == sorted(weights, reverse=True) and len(credibility.CATEGORIES) == 9
+
+
+def test_blogs_and_social_media_are_weighted_but_still_not_accepted_as_evidence():
+    assert not credibility.accepted_as_evidence('https://medium.com/@a/post')
+    assert not credibility.accepted_as_evidence('https://x.com/someone/status/1')
+    assert credibility.accepted_as_evidence('https://en.wikipedia.org/wiki/Moon')
 
 
 @pytest.mark.parametrize('url', ['https://nasa.gov.example.com/moon', 'https://notgov.com', 'https://wikipedia.org.example.net',
@@ -39,8 +71,8 @@ def test_a_lookalike_cannot_escape_the_social_media_rule_by_adding_a_suffix():
 
 
 def test_strength_counts_each_site_once():
-    assert assess(['https://www.nasa.gov/a', 'https://www.britannica.com/b']) == ('strong', 90)
-    assert assess(['https://www.nasa.gov/a', 'https://www.nasa.gov/b', 'https://example.org/c']) == ('moderate', 75)
+    assert assess(['https://www.nasa.gov/a', 'https://www.britannica.com/b']) == ('strong', 85)
+    assert assess(['https://www.nasa.gov/a', 'https://www.nasa.gov/b', 'https://example.org/c']) == ('moderate', 72)
     assert assess(['https://example.org/a', 'https://example.net/b']) == ('weak', 50)
     assert assess([]) == (None, None) and assess([None, '']) == (None, None)
 
@@ -93,9 +125,10 @@ def test_the_analyst_and_the_report_show_each_source_type():
     provider = Web(['https://www.nasa.gov/report'])
     result, _ = check(provider)
     assert provider.analysed[0]['source_tier'] == 'official'
-    assert provider.analysed[0]['source_type'] == 'Official, academic or peer-reviewed source'
+    assert provider.analysed[0]['source_type'] == 'Government or intergovernmental body'
     [evidence] = result.evidence
     assert evidence.source_tier == 'official' and evidence.source_label == provider.analysed[0]['source_type']
+    assert evidence.source_weight == 0.95
 
 
 def test_the_research_agent_sees_source_types_when_choosing_what_to_read():
@@ -112,12 +145,12 @@ def test_the_research_agent_sees_source_types_when_choosing_what_to_read():
     provider = Planner(['https://www.instagram.com/reel/abc', 'https://en.wikipedia.org/wiki/Sensor'])
     check(provider)
     assert [r['source_type'] for r in provider.states[1]['searches'][0]['results']] == [
-        'Social media or user-generated platform', 'Reference work, fact-checker or established publisher']
+        'Social media or user-generated platform', 'Wikipedia']
 
 
 @pytest.mark.parametrize('urls,strength,score,weak', [
-    (['https://www.nasa.gov/report', 'https://www.britannica.com/report'], 'strong', 90, False),
-    (['https://www.nasa.gov/report'], 'moderate', 100, False),
+    (['https://www.nasa.gov/report', 'https://www.britannica.com/report'], 'strong', 85, False),
+    (['https://www.nasa.gov/report'], 'moderate', 95, False),
     (['https://example.org/report', 'https://example.net/report'], 'weak', 50, True),
 ])
 def test_an_issued_verdict_reports_how_strong_its_sources_are(urls, strength, score, weak):
@@ -190,3 +223,21 @@ def test_sections_of_one_site_count_as_one_site(url, expected):
 def test_two_sections_of_one_site_are_one_source_for_strength():
     assert credibility.assess(['https://en.wikipedia.org/wiki/A', 'https://simple.wikipedia.org/wiki/A'])[0] == 'moderate'
     assert credibility.assess(['https://en.wikipedia.org/wiki/A', 'https://www.britannica.com/a'])[0] == 'strong'
+
+
+def test_one_domain_in_two_categories_counts_once_at_the_higher_weight_whatever_the_order():
+    urls = ['https://www.nih.gov/a', 'https://pubmed.ncbi.nlm.nih.gov/1/']
+    assert assess(urls) == assess(urls[::-1]) == ('moderate', 95)
+
+
+@pytest.mark.parametrize('url,tier', [
+    ('https://www.mit.edu/x', 'official'), ('https://www.ox.ac.uk/x', 'official'), ('https://www.unimelb.edu.au/x', 'official'),
+    ('https://si.edu/x', 'official'), ('https://pmc.ncbi.nlm.nih.gov/x', 'official'), ('https://ec.europa.eu/x', 'official'),
+    ('https://www.canada.ca/x', 'official'), ('https://www.cern.ch/x', 'official'), ('https://simple.wikipedia.org/x', 'established'),
+    ('https://www.bbc.co.uk/x', 'established'), ('https://someone.medium.com/x', 'user_generated'),
+    ('https://physics.stackexchange.com/x', 'user_generated'), ('https://selfhosted-blog.example/x', 'unrated'),
+    ('https://nasa.gov.example.com/x', 'unrated'), ('http://10.0.0.1/x', 'unrated'),
+])
+def test_the_categories_did_not_move_sites_between_tiers(url, tier):
+    """The rules act on tiers. Adding the brief's categories changed labels and weights, not what is accepted."""
+    assert rate(url).tier == tier

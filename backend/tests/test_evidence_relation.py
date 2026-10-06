@@ -21,7 +21,7 @@ def run(relation='CONTRADICTS', approved=True, fail=False):
                 assert set(payload) == {'target_assertion', 'quote', 'page'}
                 if fail:
                     raise ProviderFailure('private provider error')
-                return EvidenceRelation(relation=relation, reason='Scripted relation')
+                return EvidenceRelation(voice='PAGE', relation=relation, reason='Scripted relation')
             assert schema is CitationJudgment
             return CitationJudgment(supports_attribution=approved, stance_matches=approved, opposite_stance=False, reason='Scripted independent check')
     selection = EvidenceSelection(source_id='S1', excerpt_id='S1:E1',

@@ -214,6 +214,37 @@ test('source types and source strength are shown for an issued verdict', async (
   await expect(page.getByText('Source type: Official, academic or peer-reviewed source')).toBeVisible();
 });
 
+test('overall verdict, confidence, reuse and source weights are shown', async ({ page }) => {
+  const [first, second] = report().claims[0].evidence;
+  await mockBackend(page, { factCheck: (route, json) => json(200, report(
+    { overall_verdict: 'PARTIALLY TRUE', overall_summary: 'Of 2 claims: 1 true, 1 false.' },
+    { confidence: 'medium', confidence_reasons: ['it rests on 2 sites, fewer than 3', 'two or more of them are official, academic or established sources'],
+      reused_from: 'earlier-report', first_checked_at: '2026-10-05T09:30:00+00:00',
+      evidence: [{ ...first, source_tier: 'official', source_label: 'Government or intergovernmental body', source_weight: 0.95 }, second] })) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.locator('.overall-verdict')).toContainText('PARTIALLY TRUE');
+  await expect(page.getByText('Of 2 claims: 1 true, 1 false.')).toBeVisible();
+  await expect(page.getByText('Confidence: medium')).toBeVisible();
+  await expect(page.getByText(/it rests on 2 sites, fewer than 3; two or more of them/)).toBeVisible();
+  await expect(page.getByText(/A rule based on the evidence, not a measured probability/)).toBeVisible();
+  await expect(page.getByText('Checked before.')).toBeVisible();
+  await expect(page.getByText(/Government or intergovernmental body · credibility weight 0\.95/)).toBeVisible();
+});
+
+test('reports without the newer fields show none of those lines', async ({ page }) => {
+  await mockBackend(page, { factCheck: (route, json) => json(200, report()) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Your claim-by-claim report')).toBeVisible();
+  await expect(page.locator('.overall-verdict')).toHaveCount(0);
+  await expect(page.getByText(/Confidence:/)).toHaveCount(0);
+  await expect(page.getByText('Checked before.')).toHaveCount(0);
+  await expect(page.getByText(/credibility weight/)).toHaveCount(0);
+});
+
 test('reports without source ratings show no strength line', async ({ page }) => {
   await mockBackend(page, { factCheck: (route, json) => json(200, report()) });
   await page.goto('/');

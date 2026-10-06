@@ -6,6 +6,7 @@ from uuid import uuid4
 from agents.claim_extractor import ClaimExtractorAgent
 from agents.orchestrator import research_all
 from agents.runtime import autonomous
+from services.summary import overall
 from agents.shared import MAX_DOCUMENT_CLAIMS, loose, now, page_key, unresolved
 from schemas import AtomicClaim, Report
 from tools.fetcher import fetch_text
@@ -87,6 +88,6 @@ async def run_article_pipeline(url, provider, fetch=fetch_text) -> Report:
                            'supplied was not found word for word in the article.')
     return Report(id=str(uuid4()), mode='live', submitted_text=final_url, created_at=now(), intent=extraction.intent,
                   note=extraction.note, claims=results, limitations=limitations, usage=provider.usage,
-                  omitted_claims=extraction.omitted_claims, agent_steps=steps,
+                  omitted_claims=extraction.omitted_claims, agent_steps=steps, **overall(results),
                   coverage_status='incomplete' if refused else 'passed',
                   input_type='article', source_url=final_url, source_sha256=hashlib.sha256(text.encode('utf-8')).hexdigest())

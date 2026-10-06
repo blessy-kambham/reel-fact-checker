@@ -23,7 +23,7 @@ class Provider:
         if schema is EvidenceRelation:
             item = self.evidence[self.relations]
             self.relations += 1
-            return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item.stance], reason='Scripted relation')
+            return EvidenceRelation(voice='PAGE', relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[item.stance], reason='Scripted relation')
         assert schema is CitationJudgment
         self.checks.append(json.loads(data))
         return CitationJudgment(supports_attribution=self.attribution,

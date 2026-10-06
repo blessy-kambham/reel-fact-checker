@@ -182,3 +182,29 @@ def test_run_names_and_caps_are_checked(model, tmp_path):
         go(tmp_path, [TRUE_CASE], name='Bad Name')
     with pytest.raises(ValueError):
         go(tmp_path, [TRUE_CASE], max_usd='5.00')
+
+
+def test_the_fresh_set_is_separate_from_the_main_set():
+    from evaluation.scorecard import CASES, load_cases
+    fresh = load_cases(CASES.with_name('scorecard_cases_fresh.json'))
+    main_claims = {case['claim'] for case in load_cases()}
+    assert len(fresh) == 10 and not main_claims & {case['claim'] for case in fresh}
+    assert not {case['id'] for case in load_cases()} & {case['id'] for case in fresh}
+
+
+def test_confidence_levels_are_tallied_against_right_and_wrong():
+    high = {**claim('TRUE', 'issued', evidence=[evidence('E1', 'https://example.org/y')], cited=['E1']), 'confidence': 'high'}
+    low = {**claim('FALSE', 'issued', evidence=[evidence('E1', 'https://example.org/y')], cited=['E1']), 'confidence': 'low'}
+    summary = summarize([TRUE_CASE, {**TRUE_CASE, 'id': 'b'}], {'a': saved(TRUE_CASE, high), 'b': saved({**TRUE_CASE, 'id': 'b'}, low)})
+    assert summary['verdicts_by_confidence'] == {'high': {'right': 1, 'wrong': 0}, 'low': {'right': 0, 'wrong': 1}}
+    assert 'Verdicts by confidence level: high: 1 right, 0 wrong; low: 0 right, 1 wrong.' in markdown(summary)
+
+
+def test_only_and_cases_choose_what_the_offline_listing_covers(capsys):
+    from evaluation import scorecard
+    scorecard.main(['--only', 'pluto,sahara'])
+    assert capsys.readouterr().out.startswith('2 cases: ')
+    scorecard.main(['--cases', str(scorecard.CASES.with_name('scorecard_cases_fresh.json'))])
+    assert capsys.readouterr().out.startswith('10 cases: 4 TRUE, 6 FALSE')
+    with pytest.raises(SystemExit):
+        scorecard.main(['--only', 'no-such-case'])

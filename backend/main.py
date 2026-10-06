@@ -6,7 +6,7 @@ import tempfile
 from uuid import UUID
 from pathlib import Path
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
@@ -39,6 +39,7 @@ def setting_states():
             for name in DIAGNOSED_SETTINGS}
 DATA_DIR = Path(os.getenv('DATA_DIR') or Path(__file__).with_name('data'))
 DEFAULT_DAILY_USD, DEFAULT_DAILY_SEARCHES = '0.50', 40
+DEFAULT_REUSE_DAYS = 7   # the design brief's period for reusing the verdict of a repeated claim
 
 
 def spending_limits():
@@ -98,6 +99,26 @@ def report_limiter():
 
 def history():
     return History(DATA_DIR / 'history.sqlite3')
+
+
+def reuse_days():
+    """How long a checked claim's result is shown again instead of being researched again. 0 turns reuse off."""
+    try:
+        return max(0, int(os.getenv('REUSE_DAYS', '').strip() or DEFAULT_REUSE_DAYS))
+    except ValueError:
+        return DEFAULT_REUSE_DAYS
+
+
+def recall_claim(key):
+    """The result an identical claim received within the reuse period, or None. Never raises: a history
+    that cannot be read simply means the claim is researched."""
+    days = reuse_days()
+    if not days:
+        return None
+    try:
+        return history().find_claim(key, (datetime.now(timezone.utc) - timedelta(days=days)).isoformat())
+    except (sqlite3.Error, ValueError):
+        return None
 
 
 def todays_budget():
@@ -234,6 +255,7 @@ async def run_live(request, make_report, timeout=330):
     async with app.state.run_lock:
         provider = Providers()
         provider.spending = todays_budget()
+        provider.recall = recall_claim
         try:
             report = await asyncio.wait_for(make_report(provider), timeout=timeout)
         except asyncio.TimeoutError:

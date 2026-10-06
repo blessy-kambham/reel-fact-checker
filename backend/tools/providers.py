@@ -54,6 +54,7 @@ class Providers:
         self.client = AsyncOpenAI(api_key=os.environ['OPENAI_API_KEY'], timeout=40, max_retries=1)
         self.usage = {'input_tokens': 0, 'output_tokens': 0, 'model_calls': 0, 'search_calls': 0}
         self.spending = None  # Optional services.budget.Budget; the app sets a daily one.
+        self.recall = None    # Optional: the app sets a function that finds the result of a claim already checked.
 
     async def close(self):
         await self.client.close()

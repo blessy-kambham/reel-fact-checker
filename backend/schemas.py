@@ -85,11 +85,11 @@ class AnalystAction(StrictModel):
 
 class VerifierAction(StrictModel):
     """One step chosen by the citation verifier."""
+    reason: str = Field(description='What the passage says and how it relates to the statement and the claim. Write this first, then choose consistently with it.')
     tool: Literal['accept', 'reject', 'read_full_page']
     supports_attribution: bool = Field(description='The quote supports the attributed statement in context, without distortion. False when not yet decided.')
     stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim. False when not yet decided.')
     opposite_stance: bool = Field(description='True only when the passage has the OPPOSITE relationship to the original claim from the assigned stance: assigned FOR but it contradicts the claim, or assigned AGAINST but it supports it. False otherwise and when not yet decided.')
-    reason: str
 
 class VerdictAction(StrictModel):
     """One step chosen by the verdict agent."""
@@ -104,15 +104,19 @@ class ContentAction(StrictModel):
     tool: Literal['read_more_frames', 'finish']
     reason: str = Field(description='One sentence: why.')
 
+# In the three judgments below the explanation comes first. A model writes its answer in field order, so
+# this makes it reason before it commits to the answers rather than justify them afterwards.
+
 class EvidenceRelation(StrictModel):
+    reason: str = Field(description='What the passage says and how that bears on the target assertion. Write this first.')
+    voice: Literal['PAGE', 'REPORTED'] = Field(description='Whose statement the passage is. PAGE: the page itself states it as fact, which includes citing an authority it relies on. REPORTED: the page only describes it as something people believe or once believed, a myth, a misconception, a superseded model, a rumour, an allegation or a hypothetical.')
     relation: Literal['SUPPORTS', 'CONTRADICTS', 'BACKGROUND', 'IRRELEVANT', 'UNCERTAIN']
-    reason: str
 
 class CitationJudgment(StrictModel):
+    reason: str = Field(description='What the passage says, whether it supports the statement, and how the statement relates to the original claim. Write this first, then answer consistently with it.')
     supports_attribution: bool = Field(description='The quote supports the attributed statement in the context of the full page, without distortion.')
     stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim; relevant background may be CONTEXT without proving the claim.')
     opposite_stance: bool = Field(description='True only when the passage has the OPPOSITE relationship to the original claim from the assigned stance: assigned FOR but it contradicts the claim, or assigned AGAINST but it supports it. False for background, irrelevant or unclear passages.')
-    reason: str
 
 class Source(StrictModel):
     id: str
@@ -147,6 +151,7 @@ class Citation(EvidenceDraft):
     # The kind of site the page is on (tools/credibility.py). None in reports saved before sources were rated.
     source_tier: SourceTier | None = None
     source_label: str | None = None
+    source_weight: float | None = Field(default=None, description='Credibility weight of the kind of site the page is on, 0 to 1. A stated rule, not a measurement.')
 
 class ClaimResult(StrictModel):
     claim: str
@@ -181,6 +186,13 @@ class ClaimResult(StrictModel):
     # How strong the sources behind an issued verdict are. Describes the sources, not the chance the verdict is right.
     evidence_strength: Literal['strong', 'moderate', 'weak'] | None = None
     source_score: int | None = Field(default=None, description='Average rating of the sites the verdict cites, 0-100.')
+    # How much weight an issued verdict can bear: a rule over the evidence (services/summary.py), not a probability.
+    confidence: Literal['high', 'medium', 'low'] | None = None
+    confidence_reasons: list[str] = Field(default_factory=list)
+    # Set when the result of an identical claim, checked earlier, is shown again without new research.
+    claim_key: str | None = Field(default=None, description='Fingerprint of the claim and its context, used to recognise a repeat.')
+    reused_from: str | None = Field(default=None, description='ID of the report this result was first produced for.')
+    first_checked_at: str | None = None
 
 class InputSpan(StrictModel):
     start: int
@@ -207,6 +219,9 @@ class Report(StrictModel):
     media: 'MediaSummary | None' = None
     # What the content and claim extractor agents did beyond their first pass, in plain words.
     agent_steps: list[str] = Field(default_factory=list)
+    # One verdict for a submission with two or more claims, built from the claims' verdicts (services/summary.py).
+    overall_verdict: Verdict | None = None
+    overall_summary: str | None = None
 
 class MediaSummary(StrictModel):
     duration_seconds: float
