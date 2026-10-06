@@ -167,3 +167,26 @@ def test_reports_saved_before_sources_were_rated_still_load():
         del evidence['source_tier'], evidence['source_label']
     loaded = ClaimResult.model_validate(data)
     assert loaded.evidence_strength is None and loaded.evidence[0].source_tier is None
+
+
+@pytest.mark.parametrize('url, expected', [
+    ('https://en.wikipedia.org/wiki/Moon', 'wikipedia.org'),
+    ('https://simple.wikipedia.org/wiki/Moon', 'wikipedia.org'),
+    ('https://science.nasa.gov/moon/', 'nasa.gov'),
+    ('https://www.bbc.co.uk/news/1', 'bbc.co.uk'),
+    ('https://www.gov.uk/guidance', 'gov.uk'),
+    ('https://www.u-tokyo.ac.jp/en/', 'u-tokyo.ac.jp'),
+    ('https://example.org/page', 'example.org'),
+    ('https://www.health.govt.nz/a', 'health.govt.nz'),
+    ('http://192.168.1.10:8000/x', '192.168.1.10'),
+    ('https://EN.Wikipedia.org./wiki/Moon', 'wikipedia.org'),
+    ('not a url', ''),
+    (None, ''),
+])
+def test_sections_of_one_site_count_as_one_site(url, expected):
+    assert credibility.domain(url) == expected
+
+
+def test_two_sections_of_one_site_are_one_source_for_strength():
+    assert credibility.assess(['https://en.wikipedia.org/wiki/A', 'https://simple.wikipedia.org/wiki/A'])[0] == 'moderate'
+    assert credibility.assess(['https://en.wikipedia.org/wiki/A', 'https://www.britannica.com/a'])[0] == 'strong'

@@ -23,7 +23,7 @@ class Judge:
             return EvidenceRelation(relation='SUPPORTS', reason='Scripted relation')
         assert schema is CitationJudgment
         self.inputs.append(json.loads(data))
-        return CitationJudgment(supports_attribution=self.approved, stance_matches=True,reason='Scripted attribution check')
+        return CitationJudgment(supports_attribution=self.approved, stance_matches=True, opposite_stance=False,reason='Scripted attribution check')
 
 
 def selection(source_id='S1', excerpt_id='S1:E1'):

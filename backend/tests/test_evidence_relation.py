@@ -23,7 +23,7 @@ def run(relation='CONTRADICTS', approved=True, fail=False):
                     raise ProviderFailure('private provider error')
                 return EvidenceRelation(relation=relation, reason='Scripted relation')
             assert schema is CitationJudgment
-            return CitationJudgment(supports_attribution=approved, stance_matches=approved, reason='Scripted independent check')
+            return CitationJudgment(supports_attribution=approved, stance_matches=approved, opposite_stance=False, reason='Scripted independent check')
     selection = EvidenceSelection(source_id='S1', excerpt_id='S1:E1',
                                   statement='The fictional object reflects light.', stance='FOR')
     result = asyncio.run(verify_selection(selection, {'S1':source},

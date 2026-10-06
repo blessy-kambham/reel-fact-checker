@@ -25,7 +25,11 @@ WITHHELD_MESSAGES = {
     'coverage_failed': 'Extraction coverage was incomplete or could not be checked, so no research or verdict was attempted.',
     'no_sources': 'No readable sources were retrieved, so no verdict was attempted.',
     'search_failed': 'A search direction failed, so a verdict was withheld rather than judged on one-sided research.',
+    # Reports saved before October 2026 withheld a verdict when any citation failed its check. A failed
+    # citation is now left out and the verdict rests on the passages that passed.
     'citation_failed': 'At least one proposed citation failed validation, so the verdict was withheld.',
+    'citation_unchecked': 'A citation check could not be run, so the verdict was withheld rather than judged on partly checked evidence.',
+    'citation_disputed': 'Two independent checks disagreed about whether a passage supports or contradicts this claim, so the verdict was withheld.',
     'no_relevant_evidence': 'No verified evidence directly supports or contradicts this claim, so no verdict was attempted.',
     'verdict_check_unavailable': 'The claim-specific verdict check was unavailable; the verdict was withheld.',
     'unknown_evidence_ids': 'The verdict cited evidence IDs that were not among the verified evidence; it was withheld.',
@@ -39,6 +43,8 @@ WITHHELD_MESSAGES = {
 # Proposals that are the analyst's slips, not evidence problems: shown as rejected, never block a verdict.
 INVALID_REFERENCE_CODES = frozenset({'unknown_source', 'unknown_excerpt', 'empty_quote', 'relation_unresolved'})
 SINGLE_SOURCE_NOTE = 'This verdict rests on a single web page. Check that source before relying on it.'
+SITE_GOAL = 3  # different sites a verdict should rest on; a goal the agents work towards, not a condition
+FEW_SITES_NOTE = f'This verdict rests on fewer than {SITE_GOAL} different sites, so it has little independent confirmation.'
 # Reasons that reflect a legitimate research outcome rather than a failed or rejected check.
 COMPLETE_WITHHELD_REASONS = {'no_relevant_evidence', 'conflicting_evidence'}
 

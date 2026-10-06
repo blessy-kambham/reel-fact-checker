@@ -51,10 +51,10 @@ def test_verdict_failure_preserves_evidence_and_redacts_error(error):
     assert result.evidence and 'secret' not in result.model_dump_json()
 
 
-def test_rejected_citations_skip_final_verdict():
+def test_the_verdict_agent_is_not_asked_when_every_citation_is_rejected():
     class Provider(FakeProvider):
         async def structured(self, schema, instructions, data):
             assert schema is not VerdictDecision
             return await super().structured(schema, instructions, data)
     result = asyncio.run(research_claim(AtomicClaim(text='Claim', context=''), Provider(approved=False), fake_fetch))
-    assert result.status == 'incomplete'
+    assert result.withheld_reason == 'no_relevant_evidence' and not result.evidence and len(result.rejected_citations) == 1

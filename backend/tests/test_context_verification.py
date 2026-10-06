@@ -27,7 +27,7 @@ class Provider:
         assert schema is CitationJudgment
         self.checks.append(json.loads(data))
         return CitationJudgment(supports_attribution=self.attribution,
-                                stance_matches=self.stance, reason='Scripted judgment')
+                                stance_matches=self.stance, opposite_stance=False, reason='Scripted judgment')
 
 
 def evidence(stance, excerpt='S1:E1'):
@@ -60,7 +60,8 @@ def test_valid_context_does_not_veto_independent_support():
 @pytest.mark.parametrize('attribution,stance_matches',[(False,True),(True,False),(False,False)])
 def test_either_failed_judgment_rejects_any_stance(stance,attribution,stance_matches):
     result = run(Provider([evidence(stance)],attribution,stance_matches))
-    assert result.verdict == 'UNVERIFIABLE' and result.status == 'incomplete'
+    # The rejected passage is left out. It was the only one, so there is nothing to judge the claim on.
+    assert result.verdict == 'UNVERIFIABLE' and result.withheld_reason == 'no_relevant_evidence'
     assert result.evidence == []
     assert result.rejected_citations[0].verification_code == 'attribution_rejected'
 

@@ -20,7 +20,7 @@ def test_saved_context_is_replayed_without_search():
             import json
             assert schema is CitationJudgment
             assert json.loads(data)['page'].endswith('Full context stays available.')
-            return CitationJudgment(supports_attribution=True,stance_matches=True,reason='Scripted')
+            return CitationJudgment(supports_attribution=True,stance_matches=True, opposite_stance=False,reason='Scripted')
     result = asyncio.run(evaluate(trace(),Provider()))
     assert result['citation']['verified']
     assert result['citation']['stance']=='CONTEXT'

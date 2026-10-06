@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
 Verdict = Literal['TRUE', 'FALSE', 'PARTIALLY TRUE', 'MISLEADING', 'UNVERIFIABLE', 'OUTDATED', 'SATIRE']
 # Why the application replaced a verdict with UNVERIFIABLE. None means the verdict stage's answer was issued.
-WithheldReason = Literal['coverage_failed', 'no_sources', 'search_failed', 'citation_failed', 'no_relevant_evidence',
-                         'verdict_check_unavailable', 'unknown_evidence_ids', 'missing_evidence_ids',
+WithheldReason = Literal['coverage_failed', 'no_sources', 'search_failed', 'citation_failed', 'citation_unchecked', 'citation_disputed',
+                         'no_relevant_evidence', 'verdict_check_unavailable', 'unknown_evidence_ids', 'missing_evidence_ids',
                          'evidence_stance_mismatch', 'conflicting_evidence', 'claim_timeout', 'provider_failure',
                          'spending_limit']
 
@@ -88,6 +88,7 @@ class VerifierAction(StrictModel):
     tool: Literal['accept', 'reject', 'read_full_page']
     supports_attribution: bool = Field(description='The quote supports the attributed statement in context, without distortion. False when not yet decided.')
     stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim. False when not yet decided.')
+    opposite_stance: bool = Field(description='True only when the passage has the OPPOSITE relationship to the original claim from the assigned stance: assigned FOR but it contradicts the claim, or assigned AGAINST but it supports it. False otherwise and when not yet decided.')
     reason: str
 
 class VerdictAction(StrictModel):
@@ -110,6 +111,7 @@ class EvidenceRelation(StrictModel):
 class CitationJudgment(StrictModel):
     supports_attribution: bool = Field(description='The quote supports the attributed statement in the context of the full page, without distortion.')
     stance_matches: bool = Field(description='The assigned stance accurately relates the supported statement to the original claim; relevant background may be CONTEXT without proving the claim.')
+    opposite_stance: bool = Field(description='True only when the passage has the OPPOSITE relationship to the original claim from the assigned stance: assigned FOR but it contradicts the claim, or assigned AGAINST but it supports it. False for background, irrelevant or unclear passages.')
     reason: str
 
 class Source(StrictModel):
@@ -138,7 +140,7 @@ class Citation(EvidenceDraft):
     evidence_id: str | None = None
     proposed_stance: Literal['FOR', 'AGAINST', 'CONTEXT'] | None = None
     relation_reason: str | None = None
-    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'check_unavailable', 'relation_unresolved'] = 'not_checked'
+    verification_code: Literal['not_checked', 'verified', 'unknown_source', 'unknown_excerpt', 'empty_quote', 'quote_not_found', 'attribution_rejected', 'stance_opposed', 'check_unavailable', 'relation_unresolved'] = 'not_checked'
     retrieved_at: str | None = None
     retrieval: Literal['fetched', 'search_copy'] | None = None
     source_text_sha256: str | None = None
@@ -175,6 +177,7 @@ class ClaimResult(StrictModel):
     decision_evidence_ids: list[str] = Field(default_factory=list, description='Raw evidence IDs returned by the verdict stage, including rejected ones.')
     verdict_evidence_ids: list[str] = Field(default_factory=list, description='Evidence IDs justifying an issued verdict; empty when withheld.')
     verdict_source_count: int | None = Field(default=None, description='Distinct pages behind an issued verdict; None when withheld.')
+    verdict_site_count: int | None = Field(default=None, description='Different sites behind an issued verdict; None when withheld.')
     # How strong the sources behind an issued verdict are. Describes the sources, not the chance the verdict is right.
     evidence_strength: Literal['strong', 'moderate', 'weak'] | None = None
     source_score: int | None = Field(default=None, description='Average rating of the sites the verdict cites, 0-100.')

@@ -12,9 +12,18 @@ verified evidence is thin or one-sided, or when the verdict agent asks for more.
                                   └──────────── second round, if needed ◀───────────┘
 
 The orchestrator decides the route; the application enforces the rules. No hand-off can skip a stage:
-pages must be analysed, passages must be verified, and a verdict is refused while a search or a
-citation has failed. Any stage the orchestrator leaves out is run in the standard order afterwards,
-which is also what happens in fixed mode (`AGENT_MODE`) or when the orchestrator cannot plan.
+pages must be analysed, passages must be verified, and a verdict is refused while a search has
+failed, a citation check could not be run, or the citation verifier places a passage on the other
+side of the claim from the analyst. A passage that simply fails its check is left out, and the
+verdict rests on the passages that passed. Any stage the orchestrator leaves out is run in the
+standard order afterwards, which is also what happens in fixed mode (`AGENT_MODE`) or when the
+orchestrator cannot plan.
+
+A verdict should rest on three different sites. When the verified evidence comes from fewer, the
+claim gets its second research round to look for other sites before the verdict agent is asked. This
+is a goal, not a condition: if the round finds nothing, the verdict is issued and says how many sites
+it rests on. A second round can only add. It works inside the time the claim has left, and whatever it
+does not finish is left out, so it cannot cost a claim the evidence it already had.
 
 Used by: `main.py` (statements), `services/article.py` (articles) and `services/video.py` (videos).
 """
@@ -34,8 +43,8 @@ from agents.citation_verifier import CitationVerifierAgent
 from agents.claim_extractor import ClaimExtractorAgent
 from agents.research_agent import ResearchAgent
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
-from agents.shared import (COMPLETE_WITHHELD_REASONS, INVALID_REFERENCE_CODES, MAX_STATEMENT_CLAIMS, SINGLE_SOURCE_NOTE,
-                           WITHHELD_MESSAGES, now, unresolved)
+from agents.shared import (COMPLETE_WITHHELD_REASONS, FEW_SITES_NOTE, INVALID_REFERENCE_CODES, MAX_STATEMENT_CLAIMS,
+                           SINGLE_SOURCE_NOTE, SITE_GOAL, WITHHELD_MESSAGES, now, unresolved)
 from agents.verdict_agent import VerdictAgent
 
 NAME = 'Orchestrator'
@@ -46,6 +55,8 @@ MAX_RESEARCH_ROUNDS = 2    # the first round plus one follow-up
 MIN_ROUND_SECONDS = 85     # a follow-up round is refused when less of the claim's time limit is left
 FIRST_SELECTIONS = 6       # passages the analyst may select from the first round's pages
 FOLLOW_UP_SELECTIONS = 3   # and from a follow-up round's pages
+VERDICT_RESERVE_SECONDS = 25   # of the claim's time limit, kept back from a follow-up round for the verdict
+ROUND_OUT_OF_TIME = 'The second research round ran out of time, so what it had not finished was left out.'
 
 # The orchestrator's tools are the other agents.
 TOOLS = {
@@ -61,13 +72,16 @@ INSTRUCTIONS = (
     'yourself: each step, choose exactly ONE tool from "tools" to say which agent works next, using "progress" and '
     '"last_step". The usual route is research_agent, analyst_agent, citation_verifier, verdict_agent. '
     'Send the claim back to research_agent when the verified evidence does not directly support or contradict the '
-    'claim, when a search failed, or when the verdict agent asked for more evidence: write the specific evidence '
-    'that is missing in "instruction". New pages must go to analyst_agent and citation_verifier before verdict_agent. '
-    'Do not ask for more research when verified evidence already addresses the claim directly, or when "remaining" '
-    'shows no research round is left. Choose finish only when a tool was refused and nothing else can help.')
+    'claim, when a search failed, when the verdict agent asked for more evidence, or when "sites_with_direct_evidence" '
+    f'is below {SITE_GOAL}: write the specific evidence that is missing in "instruction", or ask for pages on other '
+    'sites. New pages must go to analyst_agent and citation_verifier before '
+    f'verdict_agent. Do not ask for more research when verified evidence from {SITE_GOAL} or more sites already addresses '
+    'the claim directly, or when "remaining" shows no research round is left. A passage that failed its citation check '
+    'is simply left out. Choose finish only when a tool was refused and nothing else can help.')
 VERDICT_REFUSALS = {
     'search_failed': 'a search failed, so the research is one-sided. Send the claim back to research_agent for the missing side, or finish.',
-    'citation_failed': 'a citation failed verification, so no verdict may be issued for this claim. Finish.',
+    'citation_unchecked': 'a citation check could not be run, so no verdict may be issued for this claim. Finish.',
+    'citation_disputed': 'the citation verifier places a passage on the other side of the claim from the analyst, so no verdict may be issued for this claim. Finish.',
     'no_relevant_evidence': 'no verified passage directly supports or contradicts the claim. Send the claim back to research_agent, or finish.',
 }
 
@@ -117,6 +131,7 @@ class _Case:
         self.passages = []
         self.outcome = None            # the verdict agent's answer
         self.evidence_request = None   # set when the verdict agent asked for more evidence instead
+        self.extra_from = None         # where a second round's passages start, when the claim could already be judged
         self.steps = []                # what the agents did, in plain words
         self.started = time.monotonic()
 
@@ -146,19 +161,65 @@ class _Case:
 
     @property
     def failed(self) -> list:
-        """Citations that failed a check. A proposal pointing at material that was never supplied, or at a
-        passage the relation check found irrelevant, is the analyst's slip and is not counted here."""
+        """Citations that failed a check and are left out of the evidence. A proposal pointing at material
+        that was never supplied, or at a passage the relation check found irrelevant, is the analyst's slip
+        and is not counted here."""
         return [c for c in self.citations if not c.verified and c.verification_code not in INVALID_REFERENCE_CODES]
+
+    @property
+    def unchecked(self) -> list:
+        """Citations whose check could not be run at all. Unlike a passage that was checked and rejected,
+        nothing is known about these, so a verdict would rest on partly checked evidence.
+
+        One exception. A second round for a claim that could already be judged can only add, so a passage it
+        could not check is left out, unless that passage was selected as evidence for the side the verified
+        evidence does not take: leaving that one out could hide evidence against the verdict."""
+        sides = {c.stance for c in self.citations if c.verified and c.stance in ('FOR', 'AGAINST')}
+
+        def left_out(index, passage):
+            return (self.extra_from is not None and index >= self.extra_from
+                    and (passage.stance == 'CONTEXT' or passage.stance in sides))
+        return [p for i, p in enumerate(self.passages) if isinstance(p, Citation) and not p.verified
+                and p.verification_code == 'check_unavailable' and not left_out(i, p)]
+
+    @property
+    def disputed(self) -> list:
+        """Passages the citation verifier places on the other side of the claim from the analyst. Leaving
+        such a passage out could hide evidence against the verdict, so it rules a verdict out instead."""
+        return [c for c in self.citations if c.verification_code == 'stance_opposed']
+
+    @property
+    def sites(self) -> set:
+        """The different sites behind the verified evidence that bears directly on the claim."""
+        return {credibility.domain(c.url) for c in self.citations
+                if c.verified and c.stance in ('FOR', 'AGAINST') and credibility.domain(c.url)}
 
     def blocked(self):
         """The WithheldReason that rules out a verdict before the verdict agent is asked, or None."""
         if self.pack.search_failed:
             return 'search_failed'
-        if self.failed:
-            return 'citation_failed'
+        if self.unchecked:
+            return 'citation_unchecked'
+        if self.disputed:
+            return 'citation_disputed'
         if not any(c.stance in ('FOR', 'AGAINST') for c in self.citations if c.verified):
             return 'no_relevant_evidence'
         return None
+
+    def wants_more_sites(self) -> bool:
+        """Whether a verdict could be asked for but rests on too few sites, and another round can still look."""
+        return (self.pack is not None and not self.unread and not self.pending and self.blocked() is None
+                and len(self.sites) < SITE_GOAL and self.follow_up_refusal() is None)
+
+    def site_request(self) -> tuple:
+        """What to ask the research agent for when more sites are wanted: (request, kind of evidence)."""
+        direct = [c.stance for c in self.citations if c.verified and c.stance in ('FOR', 'AGAINST')]
+        looking_for = 'contradicting' if direct.count('AGAINST') > direct.count('FOR') else 'supporting'
+        return 'Pages on other sites that directly address the claim, to confirm the evidence independently.', looking_for
+
+    def round_time(self) -> float:
+        """Seconds one hand-off of a second round may still take, leaving time for the verdict."""
+        return max(0.0, self.seconds_left() - VERDICT_RESERVE_SECONDS)
 
     def follow_up_refusal(self):
         """Why a second research round is not possible, or None when it is."""
@@ -177,13 +238,23 @@ class _Case:
     async def research(self, request: str = '', looking_for: str = 'supporting') -> int:
         """Research Agent: the first round, or a follow-up aimed at `request`. Returns new pages kept."""
         logged = len(self.pack.steps) if self.pack else 0
+        self.rounds += 1
         if self.pack is None:
             self.pack = await self.researcher.gather(self.claim, self.exclude, self.copy_markers)
             new = len(self.pack.sources)
         else:
-            new = await self.researcher.follow_up(request, looking_for)
-            self.evidence_request = None
-        self.rounds += 1
+            judgeable = self.blocked() is None
+            if judgeable:
+                self.extra_from = len(self.passages)   # the claim can already be judged: this round can only add
+            # A claim that can be judged but rests on too few sites does not need more pages from those sites.
+            # A round that repairs a gap may use any site.
+            avoid = self.sites if judgeable and len(self.sites) < SITE_GOAL else frozenset()
+            before, self.evidence_request = len(self.pack.sources), None
+            try:
+                await asyncio.wait_for(self.researcher.follow_up(request, looking_for, avoid), self.round_time())
+            except asyncio.TimeoutError:
+                self.pack.warnings.append(ROUND_OUT_OF_TIME)
+            new = len(self.pack.sources) - before
         self.log(ResearchAgent.name, self.pack.steps[logged:])
         return new
 
@@ -192,9 +263,10 @@ class _Case:
         Returns (passages ready for verification, passages set aside)."""
         sources, first, notes = self.unread, not self.analysed, []
         self.analysed.update(sources)
+        work = AnalystAgent(self.provider).build_case(
+            self.claim, sources, self.pack.sources, FIRST_SELECTIONS if first else FOLLOW_UP_SELECTIONS, notes, review=first)
         try:
-            entries = await AnalystAgent(self.provider).build_case(
-                self.claim, sources, self.pack.sources, FIRST_SELECTIONS if first else FOLLOW_UP_SELECTIONS, notes, review=first)
+            entries = await (work if first else asyncio.wait_for(work, self.round_time()))
         except BudgetExceeded:
             raise
         except (ProviderFailure, asyncio.TimeoutError):
@@ -217,11 +289,26 @@ class _Case:
                 continue
             draft, metadata = passage
             # Independent attribution AND stance validation remains mandatory after classification.
-            citation = await verifier.verify(draft, self.pack.sources, self.claim.text, notes, metadata['source_start'])
+            check = verifier.verify(draft, self.pack.sources, self.claim.text, notes, metadata['source_start'])
+            try:
+                citation = await (check if self.rounds < 2 else asyncio.wait_for(check, self.round_time()))
+            except asyncio.TimeoutError:
+                # Second round only: every passage still waiting is recorded as not checked, never used unchecked.
+                self.passages = [p if isinstance(p, Citation) else self._not_checked(*p) for p in self.passages]
+                self.pack.warnings.append(ROUND_OUT_OF_TIME)
+                break
             self.passages[index] = _rated(citation.model_copy(update=metadata))
             verified, checked = verified + citation.verified, checked + 1
         self.log(CitationVerifierAgent.name, notes)
         return verified, checked
+
+    def _not_checked(self, draft, metadata) -> Citation:
+        """A selected passage whose citation check did not finish in the time a second round had."""
+        source = self.pack.sources[draft.source_id]
+        return _rated(Citation(**draft.model_dump(), title=source.title, url=source.url, verified=False,
+                               verification='The citation check ran out of time. This citation was not verified.',
+                               verification_code='check_unavailable', retrieved_at=source.retrieved_at,
+                               retrieval=source.retrieval, **metadata))
 
     async def decide(self, can_request: bool = False):
         """Verdict Agent: a verdict from the verified evidence, or a request for more evidence."""
@@ -236,14 +323,24 @@ class _Case:
 
     # ---- guarantees the application enforces whatever the orchestrator chose ---------------------
 
-    async def complete(self) -> None:
-        """Run every stage that has not run, in the standard order. In fixed mode this is the whole pipeline."""
+    async def complete(self, widen: bool = False) -> None:
+        """Run every stage that has not run, in the standard order. In fixed mode this is the whole pipeline.
+        With `widen`, a claim resting on too few sites first gets the second research round it was not given."""
         if self.pack is None:
             await self.research()                 # 1. Research Agent
         if self.unread:
             await self.analyse()                  # 2. Analyst Agent
         if self.pending:
             await self.verify()                   # 3. Citation Verifier
+        if widen and self.outcome is None and self.wants_more_sites():
+            request, looking_for = self.site_request()
+            self.steps.append(f'{NAME}: The verified evidence came from {len(self.sites)} site(s), so the claim went '
+                              'back to the Research Agent to look for other sites.')
+            await self.research(request, looking_for)
+            if self.unread:
+                await self.analyse()
+            if self.pending:
+                await self.verify()
         if self.pack.sources and self.outcome is None and self.blocked() is None:
             await self.decide()                   # 4. Verdict Agent, only when a verdict is allowed at all
 
@@ -260,8 +357,12 @@ class _Case:
         ignored = [c for c in citations if not c.verified and c.verification_code in INVALID_REFERENCE_CODES]
         if ignored:
             warnings.append(f'{len(ignored)} proposed citation(s) were not supplied material or did not concern this claim, and were ignored.')
-        if failed:
-            warnings.append(f'{len(failed)} citation(s) failed validation and were excluded.')
+        rejected = sum(c.verification_code != 'check_unavailable' for c in failed)
+        if rejected:
+            warnings.append(f'{rejected} selected passage(s) failed the citation check and were left out. '
+                            'Any verdict rests only on the passages that passed.')
+        if len(failed) > rejected:
+            warnings.append(f'{len(failed) - rejected} selected passage(s) could not be checked and were left out.')
 
         decision_verdict, decision_ids = None, []
         withheld = self.blocked()
@@ -276,15 +377,19 @@ class _Case:
         if withheld:
             warnings.append(WITHHELD_MESSAGES[withheld])
         incomplete = pack.search_failed or (withheld is not None and withheld not in COMPLETE_WITHHELD_REASONS)
-        verdict_sources, strength, score = None, None, None
+        verdict_sources, verdict_sites, strength, score = None, None, None, None
         if withheld is None:
             cited = [c for c in usable if c.evidence_id in decision_ids]
             verdict_sources = len({c.url or c.source_id for c in cited})
+            # Sites are counted over the cited passages that bear directly on the claim, not background.
+            verdict_sites = len({credibility.domain(c.url) or c.source_id for c in cited if c.stance in ('FOR', 'AGAINST')})
             if verdict != 'UNVERIFIABLE':
                 # Source credibility: how strong the sites behind the verdict are. It never changes the verdict.
                 strength, score = credibility.assess(c.url for c in cited)
                 if verdict_sources == 1:
                     warnings.append(SINGLE_SOURCE_NOTE)
+                elif verdict_sites < SITE_GOAL:
+                    warnings.append(FEW_SITES_NOTE)
                 if strength == 'weak':
                     warnings.append(WEAK_SOURCES_NOTE)
         if not any(c.stance == 'AGAINST' for c in usable):
@@ -298,7 +403,7 @@ class _Case:
                            withheld_message=WITHHELD_MESSAGES[withheld] if withheld else None,
                            decision_verdict=decision_verdict, decision_evidence_ids=decision_ids,
                            verdict_evidence_ids=[] if withheld else decision_ids, verdict_source_count=verdict_sources,
-                           evidence_strength=strength, source_score=score)
+                           verdict_site_count=verdict_sites, evidence_strength=strength, source_score=score)
 
 
 async def _direct(case: _Case) -> None:
@@ -342,6 +447,10 @@ async def _direct(case: _Case) -> None:
         blocked = case.blocked()
         if blocked:
             return f'verdict_agent refused: {VERDICT_REFUSALS[blocked]}'
+        if case.wants_more_sites():
+            return (f'verdict_agent refused: the verified evidence comes from {len(case.sites)} site(s) and a verdict '
+                    f'should rest on {SITE_GOAL}. Send the claim back to research_agent for pages on other sites; '
+                    'results on the sites already used are left out of that round.')
         say('Asked the Verdict Agent for a verdict.')
         # It may ask for more evidence once, and only while another research round is possible.
         outcome = await case.decide(can_request=case.evidence_request is None and case.follow_up_refusal() is None)
@@ -366,8 +475,9 @@ async def _direct(case: _Case) -> None:
                 'verified_evidence': {'supporting': sum(c.stance == 'FOR' for c in verified),
                                       'contradicting': sum(c.stance == 'AGAINST' for c in verified),
                                       'background': sum(c.stance == 'CONTEXT' for c in verified)},
+                'sites_with_direct_evidence': len(case.sites),
                 'passages_set_aside': len(case.citations) - len(verified) - len(case.failed),
-                'citations_failed': len(case.failed),
+                'citations_failed_and_left_out': len(case.failed),
                 'verdict_agent_request': case.evidence_request.request if case.evidence_request else None,
             },
             'remaining': {'steps': steps_left, 'seconds': max(0, int(case.seconds_left())),
@@ -390,9 +500,11 @@ async def _direct(case: _Case) -> None:
 async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(), copy_markers=()) -> ClaimResult:
     """Take one claim through research, analysis, citation verification and the verdict."""
     case = _Case(claim, provider, fetch, exclude, copy_markers)
-    if autonomous(provider, 'orchestrator'):
+    directed = autonomous(provider, 'orchestrator')
+    if directed:
         await _direct(case)
-    await case.complete()
+    # Fixed mode is one pass. With the orchestrator on, a second round for more sites is guaranteed here.
+    await case.complete(widen=directed)
     return case.result()
 
 

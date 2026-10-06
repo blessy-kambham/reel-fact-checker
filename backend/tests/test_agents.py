@@ -37,7 +37,7 @@ def ask(missing, looking_for='supporting'):
 
 
 def judge(tool, attribution=True, stance=True):
-    return VerifierAction(tool=tool, supports_attribution=attribution, stance_matches=stance, reason='Scripted.')
+    return VerifierAction(tool=tool, supports_attribution=attribution, stance_matches=stance, opposite_stance=False, reason='Scripted.')
 
 
 ROUTE = [go('research_agent'), go('analyst_agent'), go('citation_verifier'), go('verdict_agent')]
@@ -77,10 +77,19 @@ class Team(FakeProvider):
             self.seen[schema].append(json.loads(data))
             return Analysis(verdict=self.verdict, evidence=self.analyses.pop(0) if self.analyses else [self.draft], limitations=[])
         if schema is EvidenceRelation and self.relations:
-            return EvidenceRelation(relation=self.relations.pop(0), reason='Scripted relation')
+            relation = self.relations.pop(0)
+            if isinstance(relation, BaseException):
+                raise relation
+            return EvidenceRelation(relation=relation, reason='Scripted relation')
         if schema in (VerdictDecision, CitationJudgment):
             self.seen[schema].append(json.loads(data))
         return await super().structured(schema, instructions, data)
+
+
+@pytest.fixture(autouse=True)
+def one_site_is_enough(monkeypatch):
+    """These tests script one page on one site. The goal of three sites has its own tests below, which set it back."""
+    monkeypatch.setattr(orchestrator, 'SITE_GOAL', 1)
 
 
 def run(provider, claim=CLAIM):
@@ -267,13 +276,285 @@ def test_a_second_round_that_cannot_be_planned_still_reads_what_it_found():
     assert any('could not plan all of its second round' in text for text in result.limitations)
 
 
-def test_a_failed_citation_still_withholds_the_verdict():
-    provider = Team('orchestrator', ROUTE + [go('finish', reason='A citation failed.')], approved=False)
+def test_a_passage_that_fails_its_check_is_left_out_and_the_rest_decide():
+    class OneBadPassage(Team):
+        async def structured(self, schema, instructions, data):
+            if schema is CitationJudgment and json.loads(data)['statement'] == SECOND.statement:
+                self.calls.append(schema.__name__)
+                return CitationJudgment(supports_attribution=False, stance_matches=True, opposite_stance=False, reason='The page does not say that.')
+            return await super().structured(schema, instructions, data)
+    provider = OneBadPassage('orchestrator', ROUTE, analyses=[[DRAFT, SECOND]])
     result = run(provider)
-    assert provider.seen[OrchestratorAction][4]['last_step'].startswith('verdict_agent refused: a citation failed verification')
-    assert provider.seen[OrchestratorAction][4]['progress']['citations_failed'] == 1
-    assert result.withheld_reason == 'citation_failed' and 'VerdictDecision' not in provider.calls
-    assert lines(result, 'Orchestrator')[-1] == 'Stopped directing: A citation failed.'
+    assert provider.seen[OrchestratorAction][3]['progress']['citations_failed_and_left_out'] == 1
+    assert result.verdict == 'TRUE' and result.verdict_state == 'issued' and result.status == 'complete'
+    assert [c.verification_code for c in result.rejected_citations] == ['attribution_rejected']
+    assert provider.seen[VerdictDecision][0]['verified_evidence'][0]['id'] == 'E1' and len(result.evidence) == 1
+
+
+class OneJudgment(Team):
+    """The citation verifier gives `judgment` for the passage whose statement is SECOND's, and accepts the rest."""
+    def __init__(self, *args, judgment, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.judgment = judgment
+
+    async def structured(self, schema, instructions, data):
+        if schema is CitationJudgment and json.loads(data)['statement'] == SECOND.statement:
+            self.calls.append(schema.__name__)
+            if isinstance(self.judgment, BaseException):
+                raise self.judgment
+            return self.judgment
+        return await super().structured(schema, instructions, data)
+
+
+def test_background_mislabelled_as_evidence_is_left_out_like_any_failed_citation():
+    too_strong = CitationJudgment(supports_attribution=True, stance_matches=False, opposite_stance=False, reason='Only background.')
+    result = run(OneJudgment('orchestrator', ROUTE, analyses=[[DRAFT, SECOND]], judgment=too_strong))
+    assert result.verdict == 'TRUE' and [c.verification_code for c in result.rejected_citations] == ['attribution_rejected']
+
+
+def test_a_passage_the_verifier_puts_on_the_other_side_rules_out_a_verdict():
+    """Leaving out a passage that may contradict the claim would hide evidence against the verdict."""
+    opposed = CitationJudgment(supports_attribution=True, stance_matches=False, opposite_stance=True,
+                               reason='This passage contradicts the claim; it was labelled as support.')
+    provider = OneJudgment('orchestrator', ROUTE + [go('finish', reason='The checks disagree.')],
+                           analyses=[[DRAFT, SECOND]], judgment=opposed)
+    result = run(provider)
+    assert provider.seen[OrchestratorAction][4]['last_step'].startswith('verdict_agent refused: the citation verifier places a passage')
+    assert result.verdict == 'UNVERIFIABLE' and result.withheld_reason == 'citation_disputed' and result.status == 'incomplete'
+    assert [c.verification_code for c in result.rejected_citations] == ['stance_opposed']
+    assert 'VerdictDecision' not in provider.calls and len(result.evidence) == 1
+
+
+def test_a_passage_only_counts_as_opposed_when_it_was_selected_as_direct_evidence():
+    background = SECOND.model_copy(update={'stance': 'CONTEXT'})
+    opposed = CitationJudgment(supports_attribution=True, stance_matches=False, opposite_stance=True, reason='Scripted.')
+    provider = OneJudgment('orchestrator', ROUTE, analyses=[[DRAFT, background]], relations=['SUPPORTS', 'BACKGROUND'], judgment=opposed)
+    result = run(provider)
+    assert result.verdict == 'TRUE' and [c.verification_code for c in result.rejected_citations] == ['attribution_rejected']
+
+
+def test_when_every_passage_fails_its_check_there_is_nothing_to_judge():
+    provider = Team('orchestrator', ROUTE + [go('finish', reason='No evidence passed.')], approved=False)
+    result = run(provider)
+    assert provider.seen[OrchestratorAction][4]['last_step'].startswith('verdict_agent refused: no verified passage')
+    assert result.withheld_reason == 'no_relevant_evidence' and 'VerdictDecision' not in provider.calls
+    assert result.limitations[0] == ('1 selected passage(s) failed the citation check and were left out. '
+                                     'Any verdict rests only on the passages that passed.')
+
+
+def test_a_check_that_could_not_run_still_withholds_the_verdict():
+    provider = Team('orchestrator', ROUTE + [go('finish', reason='A check could not run.')],
+                    relations=[ProviderFailure('Model unavailable')])
+    result = run(provider)
+    assert provider.seen[OrchestratorAction][4]['last_step'].startswith('verdict_agent refused: a citation check could not be run')
+    assert result.withheld_reason == 'citation_unchecked' and 'VerdictDecision' not in provider.calls
+
+
+# The goal of three different sites behind a verdict.
+
+class Sites(Team):
+    """Every search result is on a site of its own, `per_search` results per search."""
+    def __init__(self, *args, per_search=1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.per_search, self.served = per_search, 0
+
+    async def search(self, query):
+        self.queries.append(query)
+        hits = []
+        for _ in range(self.per_search):
+            self.served += 1
+            hits.append({'url': f'https://site{self.served}.example/page', 'title': f'Result {self.served}'})
+        return hits
+
+
+def on(source):
+    return DRAFT.model_copy(update={'source_id': source, 'excerpt_id': f'{source}:E1'})
+
+
+@pytest.fixture
+def three_sites(monkeypatch):
+    monkeypatch.setattr(orchestrator, 'SITE_GOAL', 3)
+
+
+def test_a_verdict_on_too_few_sites_first_sends_the_claim_back_for_other_sites(three_sites):
+    provider = Sites('orchestrator', ROUTE + [go('research_agent', 'pages on other sites'), go('analyst_agent'),
+                                              go('citation_verifier'), go('verdict_agent')], analyses=[[on('S1')], [on('S3')]])
+    result = run(provider)
+    refused = provider.seen[OrchestratorAction][4]
+    assert refused['progress']['sites_with_direct_evidence'] == 1
+    assert refused['last_step'].startswith('verdict_agent refused: the verified evidence comes from 1 site(s) and a verdict should rest on 3.')
+    assert 'Orchestrator: Sent the claim back to the Research Agent for supporting evidence: pages on other sites' in result.agent_steps
+    assert len(provider.queries) == 3 and result.sources_checked == 3
+    # One more round is all there is: the verdict is then issued and says how many sites it rests on.
+    assert result.verdict == 'TRUE' and result.verdict_state == 'issued' and result.verdict_site_count == 2
+    assert orchestrator.FEW_SITES_NOTE in result.limitations
+
+
+def test_the_round_for_other_sites_runs_even_when_the_orchestrator_skips_it(three_sites):
+    provider = Sites('orchestrator', ROUTE + [go('finish', reason='Good enough.')], analyses=[[on('S1')], [on('S3')]])
+    result = run(provider)
+    assert ('Orchestrator: The verified evidence came from 1 site(s), so the claim went back to the Research Agent '
+            'to look for other sites.') in result.agent_steps
+    # The names of the sites to look beyond stay out of the search query, where they would attract those sites.
+    assert provider.queries[2].endswith('Pages on other sites that directly address the claim, to confirm the evidence independently.')
+    assert result.verdict == 'TRUE' and result.verdict_site_count == 2 and len(result.evidence) == 2
+
+
+def test_three_sites_in_the_first_round_need_no_second_round(three_sites):
+    provider = Sites('orchestrator', ROUTE, per_search=2, analyses=[[on('S1'), on('S2'), on('S3')]])
+    result = run(provider)
+    assert len(provider.queries) == 2 and result.verdict == 'TRUE'
+    assert result.verdict_site_count == 3 and orchestrator.FEW_SITES_NOTE not in result.limitations
+
+
+def test_two_pages_on_one_site_count_as_one_site(three_sites):
+    provider = Team('orchestrator', ROUTE + [go('finish', reason='Good enough.')], analyses=[[on('S1'), on('S2')], []])
+    result = run(provider)
+    # Both pages are on example.org, so the claim still went back; the round found nothing the analyst selected.
+    assert len(provider.queries) == 3
+    assert result.verdict == 'TRUE' and result.verdict_source_count == 2 and result.verdict_site_count == 1
+
+
+def test_a_round_for_other_sites_that_finds_nothing_still_ends_in_a_verdict(three_sites):
+    class NothingNew(Sites):
+        async def search(self, query):
+            return await super().search(query) if len(self.queries) < 2 else (self.queries.append(query) or [])
+    provider = NothingNew('orchestrator', ROUTE + [go('research_agent', 'pages on other sites'), go('verdict_agent')])
+    result = run(provider)
+    assert provider.seen[OrchestratorAction][5]['last_step'] == 'research_agent found no new readable pages.'
+    assert result.verdict == 'TRUE' and result.verdict_site_count == 1 and result.sources_checked == 2
+
+
+def test_a_second_round_passage_that_cannot_be_checked_does_not_cost_the_verdict(three_sites):
+    """A second round can only add: the claim could already be judged on the first round's evidence."""
+    unchecked = SECOND.model_copy(update={'source_id': 'S3', 'excerpt_id': 'S3:E1'})
+    class Provider(Sites, OneJudgment):
+        pass
+    provider = Provider('orchestrator', ROUTE + [go('finish', reason='Good enough.')], analyses=[[on('S1')], [unchecked]],
+                        judgment=ProviderFailure('Model unavailable'))
+    result = run(provider)
+    assert [c.verification_code for c in result.rejected_citations] == ['check_unavailable']
+    assert result.verdict == 'TRUE' and result.verdict_state == 'issued' and result.verdict_site_count == 1
+    assert '1 selected passage(s) could not be checked and were left out.' in result.limitations
+
+
+def test_a_first_round_passage_that_cannot_be_checked_still_withholds_after_a_second_round(three_sites):
+    class Provider(Sites, OneJudgment):
+        pass
+    provider = Provider('orchestrator', ROUTE + [go('finish', reason='A check could not run.')],
+                        analyses=[[on('S1'), SECOND]], judgment=ProviderFailure('Model unavailable'))
+    result = run(provider)
+    assert result.withheld_reason == 'citation_unchecked' and len(provider.queries) == 2
+
+
+def test_a_second_round_that_runs_out_of_time_leaves_the_first_round_standing(three_sites, monkeypatch):
+    monkeypatch.setattr(orchestrator, 'MIN_ROUND_SECONDS', 0)
+    monkeypatch.setattr(orchestrator, 'VERDICT_RESERVE_SECONDS', orchestrator.CLAIM_TIMEOUT_SECONDS - 0.05)
+    class Slow(Sites):
+        async def search(self, query):
+            if len(self.queries) >= 2:
+                await asyncio.sleep(5)
+            return await super().search(query)
+    provider = Slow('orchestrator', ROUTE + [go('finish', reason='Good enough.')])
+    result = run(provider)
+    assert orchestrator.ROUND_OUT_OF_TIME in result.limitations and result.sources_checked == 2
+    assert result.verdict == 'TRUE' and result.verdict_state == 'issued'
+
+
+def test_an_unchecked_second_round_passage_for_the_other_side_still_withholds(three_sites):
+    """Leaving it out could hide evidence against the verdict the first round's evidence points to."""
+    against = SECOND.model_copy(update={'source_id': 'S3', 'excerpt_id': 'S3:E1', 'stance': 'AGAINST'})
+    class Provider(Sites, OneJudgment):
+        pass
+    provider = Provider('orchestrator', ROUTE + [go('finish', reason='Good enough.')], analyses=[[on('S1')], [against]],
+                        relations=['SUPPORTS', 'CONTRADICTS'], judgment=ProviderFailure('Model unavailable'))
+    result = run(provider)
+    assert [(c.verification_code, c.stance) for c in result.rejected_citations] == [('check_unavailable', 'AGAINST')]
+    assert result.withheld_reason == 'citation_unchecked' and 'VerdictDecision' not in provider.calls
+
+
+def test_a_citation_check_that_runs_out_of_time_is_recorded_not_dropped(monkeypatch):
+    """A second round that is the claim's only evidence: its unchecked passage must rule the verdict out."""
+    monkeypatch.setattr(orchestrator, 'MIN_ROUND_SECONDS', 0)
+    monkeypatch.setattr(orchestrator, 'VERDICT_RESERVE_SECONDS', orchestrator.CLAIM_TIMEOUT_SECONDS - 0.5)   # half a second per hand-off
+    slow = SECOND.model_copy(update={'source_id': 'S3', 'excerpt_id': 'S3:E1'})
+    class SlowCheck(Sites):
+        async def structured(self, schema, instructions, data):
+            if schema is CitationJudgment and json.loads(data)['statement'] == SECOND.statement:
+                await asyncio.sleep(5)
+            return await super().structured(schema, instructions, data)
+    background = on('S1').model_copy(update={'stance': 'CONTEXT'})
+    provider = SlowCheck('orchestrator', ROUTE[:3] + [go('research_agent', 'direct evidence'), go('analyst_agent'), go('citation_verifier'),
+                                                      go('verdict_agent'), go('finish', reason='A check did not finish.')],
+                         analyses=[[background], [on('S3'), slow]], relations=['BACKGROUND', 'SUPPORTS', 'SUPPORTS'])
+    result = run(provider)
+    assert [c.verification_code for c in result.rejected_citations] == ['check_unavailable']
+    assert result.withheld_reason == 'citation_unchecked' and orchestrator.ROUND_OUT_OF_TIME in result.limitations
+
+
+def test_a_round_that_repairs_a_gap_may_read_any_site(three_sites):
+    class SameSite(Team):
+        async def search(self, query):
+            self.queries.append(query)
+            return [{'url': f'https://example.org/page-{len(self.queries)}', 'title': 'Same site'}]
+    background = DRAFT.model_copy(update={'stance': 'CONTEXT'})
+    provider = SameSite('orchestrator', ROUTE[:3] + [go('research_agent', 'direct evidence'), go('analyst_agent'),
+                                                     go('citation_verifier'), go('verdict_agent')],
+                        analyses=[[background], [on('S3')]], relations=['BACKGROUND', 'SUPPORTS'])
+    result = run(provider)
+    assert result.sources_checked == 3 and result.verdict == 'TRUE'
+
+
+def test_no_round_for_other_sites_when_too_little_time_is_left(three_sites, monkeypatch):
+    monkeypatch.setattr(orchestrator, 'MIN_ROUND_SECONDS', orchestrator.CLAIM_TIMEOUT_SECONDS + 1)
+    provider = Sites('orchestrator', ROUTE)
+    result = run(provider)
+    assert len(provider.queries) == 2 and len(provider.seen[OrchestratorAction]) == 4
+    assert result.verdict == 'TRUE' and result.verdict_state == 'issued' and result.verdict_site_count == 1
+
+
+def test_the_round_for_other_sites_leaves_out_pages_on_sites_already_used(three_sites):
+    class SameSiteAgain(Sites):
+        async def search(self, query):
+            hits = await super().search(query)
+            return hits if len(self.queries) < 3 else [{'url': 'https://www.site1.example/another', 'title': 'Same site'}] + hits
+    provider = SameSiteAgain('orchestrator', ROUTE + [go('finish', reason='Good enough.')], analyses=[[on('S1')], [on('S3')]])
+    result = run(provider)
+    assert result.sources_checked == 3 and result.evidence[1].url == 'https://site3.example/page'
+
+
+def test_the_research_agent_is_told_which_sites_to_look_beyond(three_sites):
+    provider = Sites('orchestrator,research',
+                     ROUTE + [go('finish', reason='Good enough.')]
+                     + [ResearchAction(tool='search_web', query='a', looking_for='supporting', result_ids=[], reason='.'),
+                        ResearchAction(tool='search_web', query='b', looking_for='contradicting', result_ids=[], reason='.'),
+                        ResearchAction(tool='read_pages', query='', looking_for='supporting', result_ids=['R1', 'R2'], reason='.'),
+                        ResearchAction(tool='finish', query='', looking_for='supporting', result_ids=[], reason='Done.'),
+                        ResearchAction(tool='finish', query='', looking_for='supporting', result_ids=[], reason='Nothing more.')])
+    run(provider)
+    first, last = provider.seen[ResearchAction][0], provider.seen[ResearchAction][-1]
+    assert 'avoid_sites' not in first and last['avoid_sites'] == ['site1.example']
+
+
+def test_background_passages_are_not_counted_as_sites_behind_the_verdict(three_sites, monkeypatch):
+    monkeypatch.setattr(orchestrator, 'MIN_ROUND_SECONDS', orchestrator.CLAIM_TIMEOUT_SECONDS + 1)
+    background = on('S2').model_copy(update={'stance': 'CONTEXT'})
+    provider = Sites('orchestrator', ROUTE, analyses=[[on('S1'), background]], relations=['SUPPORTS', 'BACKGROUND'])
+    result = run(provider)
+    assert result.verdict_evidence_ids == ['E1', 'E2'] and result.verdict_source_count == 2
+    assert result.verdict_site_count == 1 and orchestrator.FEW_SITES_NOTE in result.limitations
+
+
+def test_fixed_mode_is_one_pass_and_reports_the_number_of_sites(three_sites):
+    provider = Sites('fixed')
+    result = run(provider)
+    assert len(provider.queries) == 2 and result.verdict == 'TRUE' and result.verdict_site_count == 1
+
+
+def test_no_round_for_other_sites_when_a_verdict_is_ruled_out_anyway(three_sites):
+    provider = Sites('orchestrator', ROUTE + [go('finish', reason='No evidence passed.')], approved=False)
+    result = run(provider)
+    assert len(provider.queries) == 2 and result.withheld_reason == 'no_relevant_evidence'
 
 
 def test_when_the_orchestrator_cannot_plan_the_standard_order_runs():
@@ -394,6 +675,16 @@ def test_rejected_passages_stay_in_the_order_they_were_selected():
     assert result.agent_steps == []
 
 
+def test_reports_saved_under_the_earlier_citation_rule_still_load():
+    saved = ClaimResult(claim='c', verdict='UNVERIFIABLE', status='incomplete', evidence=[], limitations=[], supporting_search='x',
+                        contradicting_search='x', sources_checked=1).model_dump()
+    saved.pop('verdict_site_count')
+    saved.update(withheld_reason='citation_failed', withheld_message='At least one proposed citation failed validation.')
+    loaded = ClaimResult.model_validate(saved)
+    assert loaded.withheld_reason == 'citation_failed' and loaded.verdict_site_count is None
+    assert 'citation_failed' in orchestrator.WITHHELD_MESSAGES
+
+
 def test_reports_saved_under_the_earlier_field_name_still_load():
     saved = run(Team('fixed')).model_dump()
     saved['research_steps'] = [saved.pop('agent_steps'), 'Finished: Both sides are covered.'][1:]
@@ -430,7 +721,7 @@ def test_the_verifier_can_read_the_full_page_before_deciding():
 def test_anything_short_of_a_clear_acceptance_rejects_the_citation(script):
     result = run(Team('citation_verifier', script, page=LONG_PAGE))
     assert result.evidence == [] and result.rejected_citations[0].verification_code == 'attribution_rejected'
-    assert result.withheld_reason == 'citation_failed'
+    assert result.withheld_reason == 'no_relevant_evidence'
 
 
 def test_the_passage_shown_is_the_one_around_the_selected_excerpt():
@@ -454,7 +745,7 @@ def test_a_short_page_is_judged_in_full_in_one_step():
 
 def test_a_verifier_that_cannot_answer_does_not_verify():
     result = run(Team('citation_verifier', [(VerifierAction, ProviderFailure('Model unavailable'))], page=LONG_PAGE))
-    assert result.rejected_citations[0].verification_code == 'check_unavailable' and result.withheld_reason == 'citation_failed'
+    assert result.rejected_citations[0].verification_code == 'check_unavailable' and result.withheld_reason == 'citation_unchecked'
 
 
 # ---- Analyst Agent ------------------------------------------------------------------------------

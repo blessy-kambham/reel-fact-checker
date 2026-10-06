@@ -76,6 +76,7 @@ export default function Report({ report }) {
       {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
       {report.mode !== 'demo' && claim.evidence_strength && <p className={`source-strength strength-${claim.evidence_strength}`}>
         <strong>Source strength: {claim.evidence_strength}</strong> · source score {claim.source_score}/100
+        {claim.verdict_site_count != null && <> · {claim.verdict_site_count} {claim.verdict_site_count === 1 ? 'site' : 'different sites'} cited (goal: 3)</>}
         <span> — rates where the cited pages come from, not how likely the verdict is to be right.</span></p>}
       <p className="report-meta">{claim.sources_checked} {claim.sources_checked === 1 ? 'page' : 'pages'} read</p>
       {(() => {

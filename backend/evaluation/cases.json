@@ -355,7 +355,7 @@
   },
   {
     "id": "mixed_valid_misattributed_citations",
-    "purpose": "A genuinely misattributed citation still withholds the verdict, even beside valid evidence.",
+    "purpose": "A misattributed citation is left out, and the verdict rests on the valid evidence beside it.",
     "claim": "The fictional sensor recorded 12 units in room A.",
     "pages": [
       {
@@ -385,7 +385,7 @@
       "The sensor was independently calibrated."
     ],
     "expected": {
-      "verdict": "UNVERIFIABLE",
+      "verdict": "TRUE",
       "evidence_count": 1
     }
   }

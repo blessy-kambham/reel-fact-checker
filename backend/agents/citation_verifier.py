@@ -35,11 +35,17 @@ JUDGMENT_INSTRUCTIONS = (
     'support the attributed STATEMENT without distortion? This is about the statement, not whether it proves the original claim. '
     'Second, stance_matches: does the supported statement have the assigned relationship to the ORIGINAL CLAIM? '
     'FOR requires direct support for that claim; AGAINST requires direct contradiction. '
+    'A passage that only reports a belief, allegation or superseded model which the page does not present as fact '
+    'is not FOR, unless the claim is itself about what was believed or alleged. '
     'CONTEXT requires relevant, accurately attributed background such as a definition or scope explanation; '
     'it need not establish the claim itself. Do not reject valid CONTEXT merely because it does not prove the claim. '
     'Reject irrelevant material, unsupported statements, missing qualifications, and cherry-picked attributions. '
     'Do not accept direct support or contradiction mislabeled as CONTEXT. A context label does not excuse an unsupported statement. '
-    'Use false for uncertain judgments and explain which check failed. This is not a truth guarantee.')
+    'Use false for uncertain judgments and explain which check failed. '
+    'Also set opposite_stance. It is true only when the passage in fact has the OPPOSITE relationship to the ORIGINAL '
+    'CLAIM from the assigned stance: assigned FOR but it contradicts the claim, or assigned AGAINST but it supports it. '
+    'It is false when the passage is merely background, irrelevant or unclear, and whenever stance_matches is true. '
+    'This is not a truth guarantee.')
 INVESTIGATION_INSTRUCTIONS = JUDGMENT_INSTRUCTIONS + (
     ' Choose exactly ONE tool from "tools". "passage" is the quote with the text around it, not the whole page. '
     'Accept or reject from the passage only when it settles both judgments. Read the full page when the passage '
@@ -67,7 +73,10 @@ class CitationVerifierAgent:
             try:
                 judgment = await self._judge(draft, source, claim_text, steps, at)
                 verified = judgment.supports_attribution and judgment.stance_matches
-                code = 'verified' if verified else 'attribution_rejected'
+                # A passage the verifier places on the other side from the analyst is a disagreement about the
+                # evidence, not just a weak citation, so it gets a code of its own.
+                opposed = not judgment.stance_matches and judgment.opposite_stance and draft.stance in ('FOR', 'AGAINST')
+                code = 'verified' if verified else 'stance_opposed' if opposed else 'attribution_rejected'
                 reason = judgment.reason
             except BudgetExceeded:
                 raise
@@ -91,14 +100,15 @@ class CitationVerifierAgent:
                                                   json.dumps({**base, 'page': source.text}))
 
         # Investigation: the verifier chooses whether the passage is enough or the whole page is needed.
-        undecided = CitationJudgment(supports_attribution=False, stance_matches=False,
+        undecided = CitationJudgment(supports_attribution=False, stance_matches=False, opposite_stance=False,
                                      reason='The verifier could not decide after reading the full page.')
         full_page = False
 
         async def decide(action):
             accepted = action.tool == 'accept'
             return Done(CitationJudgment(supports_attribution=accepted and action.supports_attribution,
-                                         stance_matches=accepted and action.stance_matches, reason=action.reason))
+                                         stance_matches=accepted and action.stance_matches,
+                                         opposite_stance=action.opposite_stance, reason=action.reason))
 
         async def read_full_page(action):
             nonlocal full_page

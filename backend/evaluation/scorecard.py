@@ -18,9 +18,11 @@ What is measured:
 - citation checks failed: passages the citation verifier rejected, out of those it was given;
 - cost and time per claim, and how many independent sites each verdict cites.
 
-It also answers one "what if": for a claim whose verdict was withheld only because a citation
-failed, the verdict agent is asked what it would conclude from the passages that did pass. That
-shows what the strict rule costs without changing the rule.
+Results saved before 6 October 2026 also carry a "what if". At that time one failed citation
+withheld the whole verdict, and for each such claim the verdict agent was asked what it would
+conclude from the passages that did pass. That showed what the rule cost, and the rule was then
+changed: a failed passage is now left out and the rest decide. Summaries of those earlier results
+still report the what-if.
 """
 import argparse
 import asyncio
@@ -35,8 +37,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from agents.orchestrator import run_pipeline
-from agents.verdict_agent import VerdictAgent
-from schemas import Citation
+from agents.shared import SITE_GOAL
 from services.budget import PRICES, Budget, BudgetExceeded
 from tools import credibility
 from tools.providers import ProviderFailure, Providers, missing_settings
@@ -47,7 +48,7 @@ PARALLEL = 3
 # A new case is not started once spending is this close to the cap, so cases in flight can finish.
 RESERVE_PER_CASE = Decimal('0.04')
 MAX_USD_CEILING = Decimal('2.00')
-CITATION_FAILURES = ('attribution_rejected', 'quote_not_found', 'empty_quote')
+CITATION_FAILURES = ('attribution_rejected', 'stance_opposed', 'quote_not_found', 'empty_quote')
 # The targets this project's design brief sets, for comparison in the summary.
 TARGETS = {'accuracy': 0.85, 'no_verdict_rate': 0.15, 'citation_failure_rate': 0.05, 'cost_per_claim_usd': 0.15,
            'p95_seconds': 120}
@@ -124,7 +125,7 @@ def summarize(cases: list[dict], results: dict) -> dict:
                 passages[rejected.get('verification_code')] += 1
             if row['outcome'] in ('correct', 'wrong') and claim['verdict'] != 'UNVERIFIABLE':
                 cited = [e for e in claim['evidence'] if e.get('evidence_id') in claim.get('verdict_evidence_ids', [])]
-                row['sites_cited'] = len({credibility.site(e.get('url')) for e in cited if credibility.site(e.get('url'))})
+                row['sites_cited'] = len({credibility.domain(e.get('url')) for e in cited if credibility.domain(e.get('url'))})
                 sites_cited.append(row['sites_cited'])
                 strengths[claim.get('evidence_strength') or 'not rated'] += 1
         rows.append(row)
@@ -138,7 +139,7 @@ def summarize(cases: list[dict], results: dict) -> dict:
     seconds = [row['seconds'] for row in ran if row['seconds'] is not None]
     costs = [row['cost_usd'] for row in ran if row['cost_usd'] is not None]
 
-    # What if a failed citation were dropped instead of withholding the verdict?
+    # Earlier results only: what if a failed citation were dropped instead of withholding the verdict?
     relaxed_correct = count['correct']
     relaxed_wrong = count['wrong']
     changed = []
@@ -167,7 +168,7 @@ def summarize(cases: list[dict], results: dict) -> dict:
         'seconds_median': _percentile(seconds, 0.5), 'seconds_p95': _percentile(seconds, 0.95),
         'model_calls_per_claim': round(statistics.mean(r['model_calls'] for r in ran if r['model_calls'] is not None), 1) if ran else None,
         'searches_per_claim': round(statistics.mean(r['search_calls'] for r in ran if r['search_calls'] is not None), 1) if ran else None,
-        'verdicts_citing_three_or_more_sites': sum(n >= 3 for n in sites_cited),
+        'verdicts_citing_three_or_more_sites': sum(n >= SITE_GOAL for n in sites_cited),
         'verdicts_citing_one_site': sum(n == 1 for n in sites_cited), 'verdicts_with_sites_counted': len(sites_cited),
         'source_strength': dict(sorted(strengths.items())),
         'if_failed_citations_were_dropped': {'accuracy': share(relaxed_correct, len(ran)), 'wrong': relaxed_wrong,
@@ -204,12 +205,14 @@ def markdown(summary: dict, name: str = '') -> str:
              f"{met(None if s['cost_per_claim_usd'] is None else s['cost_per_claim_usd'] < target['cost_per_claim_usd'])} |",
              f"| Time per claim, 95th percentile | {s['seconds_p95']} s (median {s['seconds_median']} s) | under {target['p95_seconds']} s | "
              f"{met(None if s['seconds_p95'] is None else s['seconds_p95'] < target['p95_seconds'])} |",
-             f"| Verdicts citing three or more sites | {s['verdicts_citing_three_or_more_sites']} of {s['verdicts_with_sites_counted']} | all | |",
+             f"| Verdicts citing three or more sites | {s['verdicts_citing_three_or_more_sites']} of {s['verdicts_with_sites_counted']} | all | "
+             f"{met(s['verdicts_citing_three_or_more_sites'] == s['verdicts_with_sites_counted'] if s['verdicts_with_sites_counted'] else None)} |",
              '']
     what_if = s['if_failed_citations_were_dropped']
-    lines += [f"If a failed citation were dropped instead of withholding the verdict: accuracy {pct(what_if['accuracy'])}, "
-              f"wrong verdicts {what_if['wrong']}.", '',
-              '| Claim | Expected | Result | |', '| --- | --- | --- | --- |']
+    if what_if['cases_that_would_change']:
+        lines += [f"If a failed citation were dropped instead of withholding the verdict: accuracy {pct(what_if['accuracy'])}, "
+                  f"wrong verdicts {what_if['wrong']}.", '']
+    lines += ['| Claim | Expected | Result | |', '| --- | --- | --- | --- |']
     marks = {'correct': 'right', 'wrong': 'WRONG', 'no_verdict': 'no verdict', 'error': 'not run'}
     for row in s['results']:
         result = row['verdict'] or '-'
@@ -226,15 +229,6 @@ def _cost(usage: dict, model: str) -> float:
     return float(Decimal(usage.get('input_tokens', 0)) * input_price + Decimal(usage.get('output_tokens', 0)) * output_price)
 
 
-async def _what_if(claim: dict, provider) -> str | None:
-    """For a verdict withheld only because a citation failed: the verdict the passages that passed would get."""
-    evidence = [Citation.model_validate(e) for e in claim['evidence']]
-    if claim.get('withheld_reason') != 'citation_failed' or not any(e.stance in ('FOR', 'AGAINST') for e in evidence):
-        return None
-    decided = await VerdictAgent(provider).decide(claim['claim'], evidence)
-    return decided.verdict if decided.withheld is None else 'UNVERIFIABLE'
-
-
 async def run_case(case: dict, budget: Budget, make_provider=Providers, fetch=None) -> dict:
     """One claim through the real pipeline. Always returns a result to save, never raises."""
     provider = make_provider()
@@ -245,9 +239,7 @@ async def run_case(case: dict, budget: Budget, make_provider=Providers, fetch=No
         pipeline = run_pipeline(case['claim'], provider, fetch) if fetch else run_pipeline(case['claim'], provider)
         report = (await pipeline).model_dump(mode='json')
         saved['report'] = report
-        if len(report['claims']) == 1:
-            saved['what_if'] = await _what_if(report['claims'][0], provider)
-        elif len(report['claims']) > 1:
+        if len(report['claims']) > 1:
             saved['error'] = f"split into {len(report['claims'])} claims"
     except BudgetExceeded:
         saved['error'] = 'spending_limit'

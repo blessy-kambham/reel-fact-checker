@@ -35,7 +35,7 @@ class FakeProvider:
         if schema is EvidenceRelation:
             return EvidenceRelation(relation={'FOR':'SUPPORTS','AGAINST':'CONTRADICTS','CONTEXT':'BACKGROUND'}[self.draft.stance], reason='Scripted relation')
         self.verifier_calls += 1
-        return CitationJudgment(supports_attribution=self.approved, stance_matches=True, reason='Test judgment')
+        return CitationJudgment(supports_attribution=self.approved, stance_matches=True, opposite_stance=False, reason='Test judgment')
 
 async def fake_fetch(url):
     return url, PAGE
@@ -216,13 +216,13 @@ def test_stance_mismatch_cannot_be_used_even_with_valid_attribution():
     class WrongStance(FakeProvider):
         async def structured(self, schema, instructions, data):
             if schema is CitationJudgment:
-                return CitationJudgment(supports_attribution=True, stance_matches=False,
+                return CitationJudgment(supports_attribution=True, stance_matches=False, opposite_stance=True,
                                         reason='Contradiction was incorrectly labeled FOR.')
             return await super().structured(schema, instructions, data)
     result = asyncio.run(research_claim(CLAIM, WrongStance(), fake_fetch))
     assert result.verdict == 'UNVERIFIABLE' and result.status == 'incomplete'
     assert not result.evidence
-    assert result.rejected_citations[0].verification_code == 'attribution_rejected'
+    assert result.rejected_citations[0].verification_code == 'stance_opposed' and result.withheld_reason == 'citation_disputed'
 
 
 def test_complete_extraction_retains_verified_result():

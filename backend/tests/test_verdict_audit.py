@@ -111,7 +111,8 @@ def test_long_invented_ids_are_truncated_in_reports():
 
 
 @pytest.mark.parametrize('provider, reason, status', [
-    (Scripted(approved=False), 'citation_failed', 'incomplete'),
+    # Its only passage failed the citation check, so nothing is left to judge.
+    (Scripted(approved=False), 'no_relevant_evidence', 'complete'),
     (Scripted(fail_search=True), 'search_failed', 'incomplete'),
     (Scripted(drafts=[DRAFT.model_copy(update={'stance': 'CONTEXT'})]), 'no_relevant_evidence', 'complete'),
 ])
@@ -221,7 +222,7 @@ def test_relation_and_analysis_prompts_exclude_neighbouring_assertions():
     assert 'never select evidence about them' in prompts['Analysis']
 
 
-def test_invented_id_is_ignored_but_misattribution_still_withholds():
+def test_an_invented_id_is_ignored_and_a_misattributed_passage_is_left_out():
     invented = DRAFT.model_copy(update={'excerpt_id': 'S1:INVENTED'})
     ok = check(Scripted(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1']), drafts=[DRAFT, invented]))
     assert ok.verdict == 'TRUE' and ok.verdict_state == 'issued' and ok.status == 'complete'
@@ -231,11 +232,15 @@ def test_invented_id_is_ignored_but_misattribution_still_withholds():
         async def structured(self, schema, instructions, data):
             from schemas import CitationJudgment
             if schema is CitationJudgment and json.loads(data)['statement'] == 'The sample was limited to one room.':
-                return CitationJudgment(supports_attribution=False, stance_matches=True, reason='Scripted rejection')
+                return CitationJudgment(supports_attribution=False, stance_matches=True, opposite_stance=False, reason='Scripted rejection')
             return await super().structured(schema, instructions, data)
     second = DRAFT.model_copy(update={'statement': 'The sample was limited to one room.'})
-    withheld = check(Misattributed(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1']), drafts=[DRAFT, second]))
-    assert withheld.withheld_reason == 'citation_failed'
+    judged = check(Misattributed(decision=VerdictDecision(verdict='TRUE', evidence_ids=['E1']), drafts=[DRAFT, second]))
+    # A passage that fails its check is left out and reported; the verdict rests on the one that passed.
+    assert judged.verdict == 'TRUE' and judged.verdict_state == 'issued' and judged.status == 'complete'
+    assert [c.verification_code for c in judged.rejected_citations] == ['attribution_rejected']
+    assert [e.evidence_id for e in judged.evidence] == ['E1']
+    assert any('failed the citation check and were left out' in note for note in judged.limitations)
 
 
 def test_relation_prompt_treats_general_facts_as_background():
@@ -247,6 +252,20 @@ def test_relation_prompt_treats_general_facts_as_background():
     check(Capture())
     assert 'General facts about the subject' in prompts['EvidenceRelation']
     assert 'BACKGROUND, not CONTRADICTS' in prompts['EvidenceRelation']
+
+
+def test_prompts_separate_a_reported_belief_from_a_statement_of_fact():
+    prompts = {}
+    class Capture(Scripted):
+        async def structured(self, schema, instructions, data):
+            prompts[schema.__name__] = instructions
+            return await super().structured(schema, instructions, data)
+    check(Capture())
+    assert 'only reports what a person, group, tradition, earlier era or superseded model believed' in prompts['EvidenceRelation']
+    assert 'unless the target is itself about what was believed' in prompts['EvidenceRelation']
+    assert 'which the page does not present as fact is not FOR' in prompts['CitationJudgment']
+    # The analyst is asked to spread its selections over sites rather than quote one page several times.
+    assert 'at least three different sites and at most two excerpts from any one page' in prompts['Analysis']
 
 
 def test_off_topic_pick_is_ignored_but_an_unavailable_relation_check_still_withholds():
@@ -267,5 +286,6 @@ def test_off_topic_pick_is_ignored_but_an_unavailable_relation_check_still_withh
     ignored = check(Relation('irrelevant', decision=decision, drafts=[DRAFT, off_topic]))
     assert ignored.verdict == 'TRUE' and ignored.verdict_state == 'issued'
     assert [c.verification_code for c in ignored.rejected_citations] == ['relation_unresolved']
+    # A check that could not be run is different from one that was run and failed: the verdict is withheld.
     withheld = check(Relation('fail', decision=decision, drafts=[DRAFT, off_topic]))
-    assert withheld.withheld_reason == 'citation_failed'
+    assert withheld.withheld_reason == 'citation_unchecked' and withheld.status == 'incomplete'

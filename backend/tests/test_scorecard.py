@@ -134,19 +134,19 @@ def test_no_case_starts_close_to_the_spending_cap(model, tmp_path):
     assert Provider.made == 0 and summary['ran'] == 0 and said[-1] == '  skipped a: too close to the spending cap'
 
 
-def test_a_withheld_verdict_gets_a_what_if_answer(model, tmp_path):
+def test_a_claim_with_one_failed_citation_is_judged_on_the_rest(model, tmp_path):
     class OneBadCitation(Provider):
         async def structured(self, schema, instructions, data):
             if schema is Analysis:
                 return Analysis(verdict='TRUE', evidence=[DRAFT, DRAFT], limitations=[])
             if schema is CitationJudgment and self.verifier_calls:
                 self.verifier_calls += 1
-                return CitationJudgment(supports_attribution=False, stance_matches=True, reason='Does not say that.')
+                return CitationJudgment(supports_attribution=False, stance_matches=True, opposite_stance=False, reason='Does not say that.')
             return await super().structured(schema, instructions, data)
     summary, _ = go(tmp_path, [TRUE_CASE], OneBadCitation)
     row = summary['results'][0]
-    assert row['outcome'] == 'no_verdict' and row['withheld_reason'] == 'citation_failed'
-    assert row['if_failed_citations_were_dropped'] == 'TRUE' and summary['if_failed_citations_were_dropped']['accuracy'] == 1.0
+    assert row['outcome'] == 'correct' and row['withheld_reason'] is None
+    assert summary['if_failed_citations_were_dropped']['cases_that_would_change'] == []
     assert summary['passages_it_rejected'] == 1 and summary['passages_checked_by_citation_verifier'] == 2
 
 

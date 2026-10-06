@@ -202,7 +202,7 @@ test('evidence taken from the search provider copy is labelled', async ({ page }
 test('source types and source strength are shown for an issued verdict', async ({ page }) => {
   const [first, second] = report().claims[0].evidence;
   await mockBackend(page, { factCheck: (route, json) => json(200, report({}, {
-    evidence_strength: 'moderate', source_score: 75,
+    evidence_strength: 'moderate', source_score: 75, verdict_site_count: 2,
     evidence: [{ ...first, source_tier: 'official', source_label: 'Official, academic or peer-reviewed source' },
                { ...second, source_tier: 'unrated', source_label: 'Unrated website' }] })) });
   await page.goto('/');
@@ -210,6 +210,7 @@ test('source types and source strength are shown for an issued verdict', async (
   await page.getByRole('button', { name: /Research this claim/ }).click();
   await expect(page.getByText('Source strength: moderate')).toBeVisible();
   await expect(page.getByText(/source score 75\/100/)).toBeVisible();
+  await expect(page.getByText(/2 different sites cited \(goal: 3\)/)).toBeVisible();
   await expect(page.getByText('Source type: Official, academic or peer-reviewed source')).toBeVisible();
 });
 

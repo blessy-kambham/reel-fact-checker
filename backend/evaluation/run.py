@@ -45,7 +45,7 @@ class FixtureProvider:
         if schema is CitationJudgment:
             self.judgments += 1
             approved = json.loads(data)['statement'] not in self.case.get('rejected_statements', [])
-            return CitationJudgment(supports_attribution=approved, stance_matches=True, reason='Scripted offline judgment; no model called.')
+            return CitationJudgment(supports_attribution=approved, stance_matches=True, opposite_stance=False, reason='Scripted offline judgment; no model called.')
         raise AssertionError(f'Unexpected model schema: {schema}')
 
     async def fetch(self, url):

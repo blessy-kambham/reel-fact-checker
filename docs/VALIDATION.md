@@ -24,7 +24,7 @@ All sessions together cost roughly $0.75 in model usage. A separate scored run o
 | A coverage audit rejected false statements for being false. | Textual fidelity is now checked deterministically; the model is not asked whether a claim is true at that stage. |
 | In a compound claim, one assertion's verdict was coloured by its neighbour. | The verdict comes from an isolated call that sees only the claim and its verified evidence. |
 | Passages about a neighbouring assertion were shown as support. | The relation check excludes passages about other assertions, and reports separate the evidence a verdict used from the rest. |
-| One invented excerpt ID withheld an otherwise supported verdict. | Proposals that point at material never supplied are shown as rejected but no longer block a verdict. Misattributed quotes still do. |
+| One invented excerpt ID withheld an otherwise supported verdict. | Proposals that point at material never supplied are shown as rejected but no longer block a verdict. Misattributed quotes still did, until the scorecard measured what that cost (see [SCORECARD.md](SCORECARD.md)). |
 | General facts (a staircase's total step count) were treated as contradicting a specific private claim. | Such facts are classified as background unless they rule the claim out. |
 | Structured output arrived with curly apostrophes and dashes turned into control characters, failing the verbatim check. | Model output is repaired on receipt, with regression tests built from the failing strings. |
 | Reposts of a press release were counted as independent sources for that release. | Pages repeating the checked text word for word are excluded. |
@@ -82,7 +82,7 @@ After the limit for a typed submission was raised from three claims to five, I s
 | The Eiffel Tower is in Berlin | FALSE | Cited the tower's own site and Wikipedia; also cited pages about a replica in Berlin, which are background at best |
 | Humans have walked on the Moon | TRUE | All six passages came from one Wikipedia page, so the report flags a single source |
 
-All five claims were extracted word for word and researched three at a time. The report took 100 seconds, 113 model calls and 12 searches, and cost about 15 cents. Four verdicts were correct and none was wrong. The withheld one shows the cost of the strictest rule: the verifier was right to reject the passage, but the claim lost a verdict that three good passages supported.
+All five claims were extracted word for word and researched three at a time. The report took 100 seconds, 113 model calls and 12 searches, and cost about 15 cents. Four verdicts were correct and none was wrong. The withheld one shows the cost of the strictest rule: the verifier was right to reject the passage, but the claim lost a verdict that three good passages supported. That rule was changed after the scorecard: a rejected passage is now left out and the rest decide.
 
 ### Videos
 

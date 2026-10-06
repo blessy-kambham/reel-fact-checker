@@ -72,6 +72,23 @@ def site(url: str | None) -> str:
     return host[4:] if host.startswith('www.') else host
 
 
+# Second-level names that registries put in front of a country code: bbc.co.uk, nature.com.au, u-tokyo.ac.jp.
+COUNTRY_SECOND_LEVEL = {'co', 'com', 'org', 'net', 'ac', 'go', 'ne', 'or', 'nic', 'govt', 'gc'} | OFFICIAL_SECOND_LEVEL
+
+
+def domain(url: str | None) -> str:
+    """The registered domain a page is on, so that sections of one organisation's site count as one
+    site: en.wikipedia.org and simple.wikipedia.org are both wikipedia.org. This is what "different
+    sites" means wherever sites are counted. It is an approximation made without a public-suffix
+    list: an organisation that publishes under two names (bbc.com and bbc.co.uk) still counts twice."""
+    host = site(url)
+    if ':' in host or host.replace('.', '').isdigit():
+        return host  # an IP address has no registered domain
+    labels = host.split('.')
+    keep = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in COUNTRY_SECOND_LEVEL else 2
+    return '.'.join(labels[-keep:])
+
+
 def _listed(host: str, sites: set) -> bool:
     return any(host == name or host.endswith('.' + name) for name in sites)
 
@@ -106,7 +123,7 @@ def assess(urls) -> tuple[str | None, int | None]:
     with none. Score: the sites' average weight as 0-100. Both describe the sources, not the
     chance that the verdict is right. Returns (None, None) when no page is cited.
     """
-    ratings = {site(url): rate(url) for url in urls if site(url)}
+    ratings = {domain(url): rate(url) for url in urls if site(url)}
     if not ratings:
         return None, None
     rated = sum(rating.tier in (OFFICIAL.tier, ESTABLISHED.tier) for rating in ratings.values())

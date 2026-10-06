@@ -9,8 +9,8 @@ I built this as a portfolio project to explore a question I care about: how do y
 - **Three kinds of input.** A typed statement, a public article URL, or an uploaded video (MP4, MOV or WebM, up to 3 minutes).
 - **Video understanding.** Speech is transcribed locally with Whisper, on-screen text is read from keyframes, and an optional caption is included, so a silent Reel with text overlays works too.
 - **Claim-by-claim reports.** Up to five claims from a typed submission, or the three central claims of an article or video, each with a verdict (`TRUE`, `FALSE`, `PARTIALLY TRUE`, `MISLEADING`, `OUTDATED` or `UNVERIFIABLE`), the passages the verdict rests on, and links to their sources.
-- **Source credibility.** Every page is rated by where it comes from (official or academic, established publisher, unrated, social media). Social media pages are never used as evidence, and each verdict shows how strong its sources are.
-- **Verdicts can be withheld.** If citations fail their checks, sources cannot be read, or the evidence conflicts, the report gives the reason instead of a verdict.
+- **Source credibility.** Every page is rated by where it comes from (official or academic, established publisher, unrated, social media). Social media pages are never used as evidence, and each verdict shows how strong its sources are and how many different sites it rests on.
+- **Verdicts can be withheld.** If sources cannot be read, a check could not be run, or the evidence conflicts, the report gives the reason instead of a verdict.
 - **Saved reports.** Live reports are stored in SQLite and can be reopened, printed, saved as PDF or downloaded as JSON.
 - **A free demo mode.** A fictional example report that needs no API keys and makes no external calls.
 
@@ -51,7 +51,9 @@ These are the choices that shaped the project, most of them made after a live te
 - **The verdict is isolated.** The Verdict Agent receives only the claim and the verified evidence. In a compound sentence this stops one claim's verdict drifting toward the other's.
 - **Claims must be verbatim.** Extracted claims are checked against the original text, so the model cannot quietly drop, soften or rewrite an assertion. Minor differences in quotes, apostrophes and dashes are tolerated.
 - **Agents choose, the application enforces.** A model only ever picks a tool; the application runs it. So the research agent can plan its searches but cannot finish without looking for contradicting evidence or read a page no search returned; the orchestrator can reroute a claim but cannot skip verification; and the verdict agent can ask for more evidence but cannot change its verdict to get past a refused citation.
-- **Withhold rather than guess.** Each claim reports whether its verdict was issued or withheld, with a specific reason such as `no_sources`, `citation_failed` or `conflicting_evidence`. A verdict resting on a single page is flagged.
+- **Withhold rather than guess.** Each claim reports whether its verdict was issued or withheld, with a specific reason such as `no_sources`, `citation_unchecked` or `conflicting_evidence`. A verdict resting on a single page, or on fewer than three sites, is flagged.
+- **A failed citation is left out, not fatal.** A passage that fails its citation check is listed as rejected and the verdict rests on the passages that passed. Until the scorecard measured it, one failed citation withheld the whole verdict, which cost correct answers without preventing a wrong one. Two cases still withhold: a check that could not be run, and a passage the citation verifier places on the other side of the claim from the analyst, because leaving that one out could hide evidence against the verdict.
+- **Three sites is a goal, not a gate.** The analyst is asked to spread its selections over different sites, and a claim whose verified evidence comes from fewer than three gets one more research round that looks beyond the sites already used. If that finds nothing, the verdict is still issued and says how many sites it rests on. Sections of one organisation's site (`en.wikipedia.org`, `simple.wikipedia.org`) count as one.
 - **Credibility is a stated rule, not a guess.** Sources are rated from their web address against short, published lists in [`backend/tools/credibility.py`](backend/tools/credibility.py). The rating keeps social media out of the evidence and labels each verdict's sources as strong, moderate or weak, but it never changes a verdict and is not presented as the chance that a verdict is right.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
 - **Blocked pages fall back transparently.** When a site refuses the app's fetcher, the search provider's extracted text for that page is used instead, and the report labels that evidence.
@@ -171,7 +173,7 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 441 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 478 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
 npx playwright install chromium && npm run test:e2e   # 17 browser tests, mocked backend
@@ -208,7 +210,7 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 
 - This is a demo, not a fact-checking service. Verdicts are automated and can be wrong; read the evidence.
 - The scorecard and live validation sets are small and made of well-known claims. They show the system working on specific cases, not a measured accuracy rate.
-- Source credibility is a simple rule: sites are rated from short lists of known addresses, so most of the web is "unrated", and the rating says nothing about a particular page's accuracy. Several citations can come from one page.
+- Source credibility is a simple rule: sites are rated from short lists of known addresses, so most of the web is "unrated", and the rating says nothing about a particular page's accuracy. Three different sites per verdict is aimed for, not required.
 - The same model performs analysis and checking in separate calls, so correlated mistakes are possible.
 - Only HTML and plain-text pages are read. PDFs, paywalled pages and pages that need JavaScript are skipped.
 - Video needs a file upload. Instagram offers no official way to download other people's Reels, so pasting a Reel link is not supported.
@@ -217,6 +219,6 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 
 ## What I would do next
 
-- Rate sources from more than their address (author, date, citations) and require independent sources for a verdict.
+- Rate sources from more than their address (author, date, citations), and judge whether two sites are really independent rather than only different.
 - Review accepted citations by hand on a larger reference set to measure precision.
 - Test real Reels with background music, fast speech and fast-changing text.
