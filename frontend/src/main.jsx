@@ -113,7 +113,7 @@ function App() {
         {inputType === 'text' ? <>
           <label htmlFor="claim">Your statement</label>
           <textarea id="claim" value={claim} maxLength={5000} required disabled={loading} rows={4} placeholder="Paste a factual statement you want to investigate…" aria-describedby="claim-help" onChange={event => setClaim(event.target.value)} />
-          <div className="input-meta" id="claim-help"><span>Up to 3 claims per report</span><span>{claim.length.toLocaleString()} / 5,000</span></div>
+          <div className="input-meta" id="claim-help"><span>Up to {config?.max_claims || 5} claims per report</span><span>{claim.length.toLocaleString()} / 5,000</span></div>
         </> : inputType === 'video' ? <>
           <label htmlFor="video-file">Video file</label>
           <input id="video-file" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" required disabled={loading} aria-describedby="video-help" onChange={event => setVideoFile(event.target.files?.[0] || null)} />

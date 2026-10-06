@@ -6,7 +6,7 @@ from uuid import uuid4
 from agents.claim_extractor import ClaimExtractorAgent
 from agents.orchestrator import research_all
 from agents.runtime import autonomous
-from agents.shared import loose, now, page_key, unresolved
+from agents.shared import MAX_DOCUMENT_CLAIMS, loose, now, page_key, unresolved
 from schemas import AtomicClaim, Report
 from tools.fetcher import fetch_text
 
@@ -21,6 +21,13 @@ def verbatim(value: str, article: str) -> bool:
     return bool(value.strip()) and loose(value) in loose(article)
 
 
+def _central(extraction):
+    """Keep only as many claims as a document report checks; any beyond that are reported as left out."""
+    if len(extraction.claims) <= MAX_DOCUMENT_CLAIMS:
+        return extraction
+    return extraction.model_copy(update={'claims': extraction.claims[:MAX_DOCUMENT_CLAIMS], 'omitted_claims': True})
+
+
 async def select_and_research(text, provider, fetch=fetch_text, *, kind, exclude=frozenset()):
     """Pick up to three central claims copied verbatim from `text` and research them.
 
@@ -29,7 +36,7 @@ async def select_and_research(text, provider, fetch=fetch_text, *, kind, exclude
     Pages in `exclude`, and pages repeating a claim or its context word for word, are never used as evidence.
     """
     extractor = ClaimExtractorAgent(provider)
-    extraction = await extractor.select_from_document(text, kind)
+    extraction = _central(await extractor.select_from_document(text, kind))
     steps = []
 
     def copied(candidate):
@@ -40,6 +47,7 @@ async def select_and_research(text, provider, fetch=fetch_text, *, kind, exclude
         # The Claim Extractor sees which claims were not exact copies and may revise once. The revision is
         # used only when it has more word-for-word claims than before, so it cannot pass by dropping a claim.
         revised = await extractor.review(text, extraction, [f'Not a word-for-word copy of the text: {c.text}' for c in slips], kind)
+        revised = _central(revised) if revised is not None else None
         if revised is not None and len(copied(revised)) > len(copied(extraction)):
             extraction = revised
             steps.append(f'{extractor.name}: Revised its claims after {len(slips)} were not copied word for word; '

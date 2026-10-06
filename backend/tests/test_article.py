@@ -230,3 +230,12 @@ def test_relation_prompt_treats_differently_written_dates_as_compatible():
     from agents.analyst_agent import AnalystAgent
     import inspect
     assert 'weekday versus a calendar date' in inspect.getsource(AnalystAgent.classify)
+
+
+def test_an_article_is_still_limited_to_three_central_claims():
+    sentences = ['Repairs are expected to take eight months', 'Local shops report fewer visitors since the closure',
+                 'cracked welds', 'City officials said', 'the fictional Harbor Bridge closed on March 3']
+    provider = ArticleProvider([AtomicClaim(text=sentence, context='') for sentence in sentences])
+    report = run(provider, fetcher({ARTICLE_URL: (ARTICLE_URL, ARTICLE),
+                                    'https://evidence.example.org/report': ('https://evidence.example.org/report', PAGE)}))
+    assert [c.claim for c in report.claims] == sentences[:3]

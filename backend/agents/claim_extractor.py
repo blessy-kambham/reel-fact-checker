@@ -1,7 +1,8 @@
 """Claim Extractor agent.
 
 Classifies what kind of content was submitted (factual, opinion, satire, fictional, unrelated) and
-extracts up to three atomic claims, copied word for word. It never judges whether a claim is true.
+extracts the claims in it, copied word for word: up to five from a typed statement, up to three central
+ones from an article or a video. It never judges whether a claim is true.
 
 The agent checks its own work. The application tests every extraction against the submission (claims
 must be copied word for word; for statements a separate coverage audit must pass). When that check
@@ -21,7 +22,7 @@ from tools.providers import ProviderFailure
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
 
 STATEMENT_INSTRUCTIONS = (
-    'Classify intent and extract at most three atomic factual claims without adding facts. Preserve dates, quantities, '
+    'Classify intent and extract at most five atomic factual claims without adding facts. Preserve dates, quantities, '
     'attribution, and qualifiers. Do not treat opinions or fictional content as factual claims. If mixed, extract only '
     'checkable assertions and explain exclusions in note. Factual means capable of being checked, not known to be true. '
     'Include false, misleading and uncertain assertions exactly as asserted. Never drop an assertion because you think it is incorrect. '
@@ -29,7 +30,7 @@ STATEMENT_INSTRUCTIONS = (
     'For split claims, set each context to the entire original submission verbatim so relationships and pronouns are preserved. '
     'Split compound assertions, including conclusions after so or therefore. Keep dates attached to the event; do not extract a date as a separate claim. '
     'For example, the fictional bridge is closed so traffic must use the ferry contains TWO checkable assertions; preserve both. '
-    'Before returning, compare the extraction with every assertion in the submission. Set omitted_claims if any checkable assertion is missing, including more than three claims. '
+    'Before returning, compare the extraction with every assertion in the submission. Set omitted_claims if any checkable assertion is missing, including more than five claims. '
     'For nonfactual intent return no claims. Do not determine truth during extraction.')
 DOCUMENT_INSTRUCTIONS = (
     'Classify its intent. Select at most three central factual claims it '

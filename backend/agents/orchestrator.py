@@ -6,7 +6,7 @@ chooses which agent works next: its tools are the other agents (`research_agent`
 produced and decides again, so it can send a claim back for a second research round when the
 verified evidence is thin or one-sided, or when the verdict agent asks for more.
 
-    Claim Extractor ─▶ for each claim, two at a time:
+    Claim Extractor ─▶ for each claim, three at a time:
                          Research Agent ⇄ Analyst Agent ─▶ Citation Verifier ─▶ Verdict Agent
                                   ▲                                                 │
                                   └──────────── second round, if needed ◀───────────┘
@@ -34,12 +34,12 @@ from agents.citation_verifier import CitationVerifierAgent
 from agents.claim_extractor import ClaimExtractorAgent
 from agents.research_agent import ResearchAgent
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
-from agents.shared import (COMPLETE_WITHHELD_REASONS, INVALID_REFERENCE_CODES, SINGLE_SOURCE_NOTE,
+from agents.shared import (COMPLETE_WITHHELD_REASONS, INVALID_REFERENCE_CODES, MAX_STATEMENT_CLAIMS, SINGLE_SOURCE_NOTE,
                            WITHHELD_MESSAGES, now, unresolved)
 from agents.verdict_agent import VerdictAgent
 
 NAME = 'Orchestrator'
-MAX_PARALLEL_CLAIMS = 2
+MAX_PARALLEL_CLAIMS = 3    # five claims then finish within two time limits, inside the report's own limit
 CLAIM_TIMEOUT_SECONDS = 150
 MAX_STEPS = 9              # hand-offs the orchestrator may make for one claim, including refused ones
 MAX_RESEARCH_ROUNDS = 2    # the first round plus one follow-up
@@ -397,7 +397,7 @@ async def research_claim(claim, provider, fetch=fetch_text, exclude=frozenset(),
 
 
 async def research_all(claims, provider, fetch=fetch_text, exclude=frozenset(), copy_markers=None):
-    """Run one research branch per claim, at most two at a time; every failure becomes a named withheld verdict."""
+    """Run one research branch per claim, a few at a time; every failure becomes a named withheld verdict."""
     limiter = asyncio.Semaphore(MAX_PARALLEL_CLAIMS)
     async def branch(claim):
         async with limiter:
@@ -445,7 +445,7 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
     if coverage_status == 'incomplete' and autonomous(provider, 'claim_extractor'):
         # The Claim Extractor sees what the check found and may revise once. A revision faces the same check.
         problems = coverage_issues or ['The extraction says checkable assertions were left out (omitted_claims). Every '
-                                       'checkable assertion must be extracted, unless there are more than three.']
+                                       f'checkable assertion must be extracted, unless there are more than {MAX_STATEMENT_CLAIMS}.']
         revised = await extractor.review(text, extraction, problems)
         if revised is None:
             steps.append(f'{extractor.name}: Kept its extraction after the coverage check found a problem.')
@@ -464,7 +464,7 @@ async def run_pipeline(text, provider, fetch=fetch_text) -> Report:
                       limitations=[reason] + coverage_issues, usage=provider.usage, agent_steps=steps,
                       omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])
     results = await research_all(extraction.claims, provider, fetch) if extraction.intent == 'FACTUAL' else []
-    limitations = ['At most three claims are checked per report, with up to eight pages read per claim.']
+    limitations = [f'At most {MAX_STATEMENT_CLAIMS} claims are checked per report, with up to eight pages read per claim.']
     return Report(id=str(uuid4()), mode='live', submitted_text=text, created_at=now(), intent=extraction.intent,
                   note=extraction.note, claims=results, limitations=limitations, usage=provider.usage, agent_steps=steps,
                   omitted_claims=extraction.omitted_claims, coverage_status=coverage_status, input_spans=input_spans or [])

@@ -8,7 +8,7 @@ I built this as a portfolio project to explore a question I care about: how do y
 
 - **Three kinds of input.** A typed statement, a public article URL, or an uploaded video (MP4, MOV or WebM, up to 3 minutes).
 - **Video understanding.** Speech is transcribed locally with Whisper, on-screen text is read from keyframes, and an optional caption is included, so a silent Reel with text overlays works too.
-- **Claim-by-claim reports.** Up to three claims per submission, each with a verdict (`TRUE`, `FALSE`, `PARTIALLY TRUE`, `MISLEADING`, `OUTDATED` or `UNVERIFIABLE`), the passages the verdict rests on, and links to their sources.
+- **Claim-by-claim reports.** Up to five claims from a typed submission, or the three central claims of an article or video, each with a verdict (`TRUE`, `FALSE`, `PARTIALLY TRUE`, `MISLEADING`, `OUTDATED` or `UNVERIFIABLE`), the passages the verdict rests on, and links to their sources.
 - **Source credibility.** Every page is rated by where it comes from (official or academic, established publisher, unrated, social media). Social media pages are never used as evidence, and each verdict shows how strong its sources are.
 - **Verdicts can be withheld.** If citations fail their checks, sources cannot be read, or the evidence conflicts, the report gives the reason instead of a verdict.
 - **Saved reports.** Live reports are stored in SQLite and can be reopened, printed, saved as PDF or downloaded as JSON.
@@ -20,7 +20,7 @@ The work is done by a team of agents. Each agent is a model with its own tools: 
 
 ```text
 video ──▶ Content Extractor ─┐
-article ─────────────────────┼─▶ Claim Extractor ─▶ for each claim, two at a time:
+article ─────────────────────┼─▶ Claim Extractor ─▶ for each claim, three at a time:
 statement ───────────────────┘
                                    Orchestrator chooses the next agent
                                         │
@@ -34,7 +34,7 @@ statement ───────────────────┘
 | --- | --- | --- |
 | [Orchestrator](backend/agents/orchestrator.py) | Directs the work on each claim and can send it back for more research. | The other agents, and `finish` |
 | [Content Extractor](backend/agents/content_extractor.py) | Turns a video into text: speech (Whisper), on-screen text (keyframes) and caption. | `read_more_frames`, `finish` |
-| [Claim Extractor](backend/agents/claim_extractor.py) | Classifies the content and extracts up to three claims, copied word for word. | `revise`, `keep` |
+| [Claim Extractor](backend/agents/claim_extractor.py) | Classifies the content and extracts its claims, copied word for word: up to five from a statement, three from an article or video. | `revise`, `keep` |
 | [Research Agent](backend/agents/research_agent.py) | One per claim. Writes its own search queries and chooses which results to read. | `search_web`, `read_pages`, `finish` |
 | [Analyst Agent](backend/agents/analyst_agent.py) | Selects passages for and against the claim by ID and relates each one to it. | `select_evidence`, `finish` |
 | [Citation Verifier](backend/agents/citation_verifier.py) | Confirms each quote exists in the page and says what it is cited for. | `accept`, `reject`, `read_full_page` |

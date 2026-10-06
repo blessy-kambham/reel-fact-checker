@@ -24,8 +24,8 @@ class AtomicClaim(StrictModel):
 
 class Extraction(StrictModel):
     intent: Literal['FACTUAL', 'OPINION', 'SATIRE', 'FICTIONAL', 'UNRELATED']
-    claims: list[AtomicClaim] = Field(max_length=3)
-    omitted_claims: bool = Field(description="True if any checkable assertion was left out, including when the three-claim limit is exceeded. False assertions must be extracted too.")
+    claims: list[AtomicClaim] = Field(max_length=5)  # agents.shared.MAX_STATEMENT_CLAIMS
+    omitted_claims: bool = Field(description="True if any checkable assertion was left out, including when the claim limit is exceeded. False assertions must be extracted too.")
     note: str
 
 class ExtractionCoverage(StrictModel):

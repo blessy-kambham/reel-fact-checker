@@ -4,6 +4,7 @@ import socket
 import pytest
 from schemas import VerdictDecision, EvidenceRelation, ExtractionCoverage, AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
 from services.pipeline import research_claim, run_pipeline, verify_citation
+from agents.orchestrator import MAX_PARALLEL_CLAIMS
 from tools.providers import ProviderFailure
 from tools.fetcher import validate_url, PublicResolver
 
@@ -92,9 +93,31 @@ def test_parallelism_cap():
             await asyncio.sleep(0.01)
             active -= 1
             return url, PAGE
-        await run_pipeline('test', FakeProvider(claims=[CLAIM, CLAIM, CLAIM]), fetch)
-        assert peak == 2
+        await run_pipeline('test', FakeProvider(claims=[CLAIM] * 5), fetch)
+        assert peak == MAX_PARALLEL_CLAIMS == 3
     asyncio.run(scenario())
+
+
+def test_five_statements_are_each_checked():
+    sentences = ['The sensor measured 12 units.', 'The sample was one room.', 'The test ran twice.',
+                 'The report is public.', 'The lab is in the fictional town of Arlo.']
+    text = ' '.join(sentences)
+    provider = FakeProvider(claims=[AtomicClaim(text=sentence, context=text) for sentence in sentences])
+    report = asyncio.run(run_pipeline(text, provider, fake_fetch))
+    assert [c.claim for c in report.claims] == sentences and [c.verdict for c in report.claims] == ['TRUE'] * 5
+    assert report.coverage_status == 'passed' and [span.text for span in report.input_spans] == sentences
+    assert len(provider.queries) == 10 and report.limitations[0].startswith('At most 5 claims are checked per report')
+
+
+def test_five_claims_fit_inside_the_report_time_limit():
+    import inspect
+    import math
+    import main
+    from agents.orchestrator import CLAIM_TIMEOUT_SECONDS
+    from agents.shared import MAX_STATEMENT_CLAIMS
+    report_limit = inspect.signature(main.run_live).parameters['timeout'].default
+    assert math.ceil(MAX_STATEMENT_CLAIMS / MAX_PARALLEL_CLAIMS) * CLAIM_TIMEOUT_SECONDS < report_limit
+    assert Extraction.model_fields['claims'].metadata[0].max_length == MAX_STATEMENT_CLAIMS
 
 def test_opinion_skips_research():
     class Opinion(FakeProvider):

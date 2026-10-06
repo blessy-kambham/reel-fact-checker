@@ -6,6 +6,12 @@ from urllib.parse import urldefrag
 from schemas import ClaimResult
 
 
+# How many claims one report checks. Typed statements are split into their assertions; for an article or
+# a video the claim extractor picks the central ones. schemas.Extraction allows up to the larger number.
+MAX_STATEMENT_CLAIMS = 5
+MAX_DOCUMENT_CLAIMS = 3
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 

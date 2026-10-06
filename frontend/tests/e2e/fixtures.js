@@ -2,7 +2,7 @@
 export const API = 'http://127.0.0.1:8000';
 
 export const liveConfig = {
-  live_ready: true, live_enabled: true, missing_settings: [], max_claims: 3, message: 'Live research is ready.',
+  live_ready: true, live_enabled: true, missing_settings: [], max_claims: 5, message: 'Live research is ready.',
   video_ready: true, video_message: 'Video checks are available.',
   spending: { spent_usd: 0.031, limit_usd: 0.5, searches: 4, search_limit: 40, stopped: false },
 };

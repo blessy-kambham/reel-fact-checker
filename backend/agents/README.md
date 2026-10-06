@@ -4,7 +4,7 @@ The fact-checker is a team of agents. Each agent is a model with a goal, its own
 
 ```text
 video ──▶ Content Extractor ─┐
-article ─────────────────────┼─▶ Claim Extractor ─▶ for each claim, two at a time:
+article ─────────────────────┼─▶ Claim Extractor ─▶ for each claim, three at a time:
 statement ───────────────────┘
                                    Orchestrator chooses the next agent
                                         │
@@ -20,7 +20,7 @@ statement ───────────────────┘
 | --- | --- | --- | --- |
 | Orchestrator | [`orchestrator.py`](orchestrator.py) | Directs the work on one claim and owns the shared state. | The other agents: `research_agent`, `analyst_agent`, `citation_verifier`, `verdict_agent`, and `finish`. It can send a claim back for a second research round. |
 | Content Extractor | [`content_extractor.py`](content_extractor.py) | Turns a video into text: speech (Whisper), on-screen text (keyframes) and the caption. | After its first pass: `read_more_frames` for a closer look at on-screen text, or `finish`. |
-| Claim Extractor | [`claim_extractor.py`](claim_extractor.py) | Classifies the content and extracts up to three claims copied word for word. | When the application's check of its extraction fails: `revise` or `keep`. |
+| Claim Extractor | [`claim_extractor.py`](claim_extractor.py) | Classifies the content and extracts its claims copied word for word: up to five from a statement, three from an article or video. | When the application's check of its extraction fails: `revise` or `keep`. |
 | Research Agent | [`research_agent.py`](research_agent.py) | Gathers the pages the claim will be judged on. One per claim. | `search_web` with a query it writes, `read_pages`, `finish`. |
 | Analyst Agent | [`analyst_agent.py`](analyst_agent.py) | Selects passages for and against the claim by ID, and relates each one to that exact claim. | When the relation check sets its selections aside: `select_evidence` to pick replacements, or `finish`. |
 | Citation Verifier | [`citation_verifier.py`](citation_verifier.py) | Confirms each quote is in the page and says what it is cited for. | `accept`, `reject`, or `read_full_page` when the passage around the quote is not enough. |

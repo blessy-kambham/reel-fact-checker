@@ -24,6 +24,7 @@ from tools import media
 from tools.media import MediaRejected, MediaToolMissing
 from tools.transcribe import LocalWhisper, TranscriptionUnavailable
 from services.video import MAX_CAPTION_CHARS, run_video_pipeline
+from agents.shared import MAX_STATEMENT_CLAIMS
 from services.pipeline import run_pipeline
 from tools.providers import Providers, ProviderFailure, missing_settings
 
@@ -139,7 +140,7 @@ def config(request: Request):
         if spending['stopped']:
             message = "Today's spending limit has been reached. Live research resumes after midnight UTC."
     video_ready, video_message = video_status()
-    return {'live_ready': ready, 'live_enabled': enabled, 'missing_settings': missing, 'max_claims': 3,
+    return {'live_ready': ready, 'live_enabled': enabled, 'missing_settings': missing, 'max_claims': MAX_STATEMENT_CLAIMS,
             'spending': spending, 'message': message, 'video_ready': ready and video_ready, 'video_message': video_message,
             'auth': {'required': access.auth_required(), 'signed_in': access.valid_session(request.cookies.get(access.COOKIE))},
             'reports_per_hour': access.reports_per_hour(),
