@@ -261,6 +261,14 @@ async def run_case(case: dict, budget: Budget, make_provider=Providers, fetch=No
     return saved
 
 
+def _interrupted(saved: dict) -> bool:
+    """Whether a saved case never reached a judgement because a provider or the spending cap stopped it.
+    Such a case says nothing about the system's verdicts, so a later run of the same name tries it again."""
+    stopped = ('spending_limit', 'provider_failure')
+    claims = (saved.get('report') or {}).get('claims') or []
+    return saved.get('error') in stopped or any(claim.get('withheld_reason') in stopped for claim in claims)
+
+
 def load_results(directory: Path) -> dict:
     results = {}
     for path in sorted(directory.glob('case-*.json')):
@@ -282,8 +290,7 @@ async def run(name: str, max_usd, max_searches: int, cases=None, results_root: P
     directory.mkdir(parents=True, exist_ok=True)
     budget = Budget(directory / 'ledger.json', search_limit=max_searches, max_usd=max_usd, model=os.environ['OPENAI_MODEL'])
     done = load_results(directory)
-    # A case that stopped on the spending limit or a provider error has no verdict to score: run it again.
-    waiting = [case for case in cases if case['id'] not in done or done[case['id']].get('error') in ('spending_limit', 'provider_failure')]
+    waiting = [case for case in cases if case['id'] not in done or _interrupted(done[case['id']])]
     say(f'{len(cases) - len(waiting)} of {len(cases)} cases already have a result; running {len(waiting)}.')
     limiter, active = asyncio.Semaphore(PARALLEL), 0
 

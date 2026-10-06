@@ -164,6 +164,19 @@ def test_a_case_stopped_by_a_provider_error_is_run_again(model, tmp_path):
     assert said[0] == '0 of 1 cases already have a result; running 1.' and summary['correct'] == 1
 
 
+def test_a_claim_withheld_for_a_provider_failure_is_run_again(model, tmp_path):
+    class AnalysisDown(Provider):
+        async def structured(self, schema, instructions, data):
+            if schema is Analysis:
+                from tools.providers import ProviderFailure
+                raise ProviderFailure('The model provider was limiting requests.')
+            return await super().structured(schema, instructions, data)
+    summary, _ = go(tmp_path, [TRUE_CASE], AnalysisDown)
+    assert summary['results'][0]['withheld_reason'] == 'provider_failure' and summary['no_verdict'] == 1
+    summary, said = go(tmp_path, [TRUE_CASE])
+    assert said[0] == '0 of 1 cases already have a result; running 1.' and summary['correct'] == 1 and summary['no_verdict'] == 0
+
+
 def test_run_names_and_caps_are_checked(model, tmp_path):
     with pytest.raises(ValueError):
         go(tmp_path, [TRUE_CASE], name='Bad Name')
