@@ -1,0 +1,307 @@
+[
+  {
+    "id": "moon-orbits",
+    "claim": "The Moon orbits Earth.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "space",
+    "reference": "https://science.nasa.gov/moon/facts/"
+  },
+  {
+    "id": "water-freezes",
+    "claim": "Water freezes at 0 degrees Celsius at standard atmospheric pressure.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "science",
+    "reference": "https://water.usgs.gov/gotita/waterproperties.html"
+  },
+  {
+    "id": "water-boils",
+    "claim": "Water boils at 100 degrees Celsius at sea level.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Boiling_point"
+  },
+  {
+    "id": "eiffel-paris",
+    "claim": "The Eiffel Tower is located in Paris.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "geography",
+    "reference": "https://www.toureiffel.paris/en/the-monument/universal-exhibition"
+  },
+  {
+    "id": "eiffel-1889",
+    "claim": "The Eiffel Tower was built for the 1889 Paris World's Fair.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "history",
+    "reference": "https://www.toureiffel.paris/en/the-monument/universal-exhibition"
+  },
+  {
+    "id": "everest",
+    "claim": "Mount Everest is the highest mountain on Earth above sea level.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "geography",
+    "reference": "https://oceanservice.noaa.gov/facts/highestpoint.html"
+  },
+  {
+    "id": "pacific",
+    "claim": "The Pacific Ocean is the largest ocean on Earth.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "geography",
+    "reference": "https://en.wikipedia.org/wiki/Pacific_Ocean"
+  },
+  {
+    "id": "bones",
+    "claim": "An adult human body has 206 bones.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "health",
+    "reference": "https://en.wikipedia.org/wiki/Human_skeleton"
+  },
+  {
+    "id": "amazon",
+    "claim": "The Amazon River flows through Brazil.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "geography",
+    "reference": "https://en.wikipedia.org/wiki/Amazon_River"
+  },
+  {
+    "id": "moon-landing",
+    "claim": "Humans have walked on the Moon.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "space",
+    "reference": "https://en.wikipedia.org/wiki/Apollo_program"
+  },
+  {
+    "id": "light-sound",
+    "claim": "Light travels faster than sound.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Speed_of_light"
+  },
+  {
+    "id": "venus",
+    "claim": "Venus is the hottest planet in the Solar System.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "space",
+    "reference": "https://en.wikipedia.org/wiki/Venus"
+  },
+  {
+    "id": "antarctica",
+    "claim": "Antarctica is the coldest continent on Earth.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "geography",
+    "reference": "https://en.wikipedia.org/wiki/Antarctica"
+  },
+  {
+    "id": "vacuum",
+    "claim": "Sound cannot travel through a vacuum.",
+    "expected": "TRUE",
+    "accepted": [
+      "TRUE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Sound"
+  },
+  {
+    "id": "great-wall",
+    "claim": "The Great Wall of China is visible from the Moon with the naked eye.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "space",
+    "reference": "https://www.nasa.gov/image-article/great-wall/"
+  },
+  {
+    "id": "moon-light",
+    "claim": "The Moon produces its own visible light like the Sun.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "space",
+    "reference": "https://science.nasa.gov/moon/facts/"
+  },
+  {
+    "id": "moon-rotation",
+    "claim": "The Moon never rotates.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "space",
+    "reference": "https://science.nasa.gov/moon/facts/"
+  },
+  {
+    "id": "lightning",
+    "claim": "Lightning never strikes the same place twice.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Lightning"
+  },
+  {
+    "id": "sharks",
+    "claim": "Sharks are mammals.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Shark"
+  },
+  {
+    "id": "eiffel-berlin",
+    "claim": "The Eiffel Tower is in Berlin.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "geography",
+    "reference": "https://en.wikipedia.org/wiki/Eiffel_Tower"
+  },
+  {
+    "id": "ten-percent",
+    "claim": "Humans use only 10 percent of their brains.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "health",
+    "reference": "https://en.wikipedia.org/wiki/Ten_percent_of_the_brain_myth"
+  },
+  {
+    "id": "goldfish",
+    "claim": "Goldfish have a memory of only three seconds.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Goldfish"
+  },
+  {
+    "id": "bats",
+    "claim": "Bats are blind.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Bat"
+  },
+  {
+    "id": "sun-orbits",
+    "claim": "The Sun orbits the Earth.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "space",
+    "reference": "https://en.wikipedia.org/wiki/Heliocentrism"
+  },
+  {
+    "id": "vaccines",
+    "claim": "Vaccines cause autism.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "health",
+    "reference": "https://en.wikipedia.org/wiki/Vaccines_and_autism"
+  },
+  {
+    "id": "bulls",
+    "claim": "Bulls are enraged by the color red.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE"
+    ],
+    "topic": "science",
+    "reference": "https://en.wikipedia.org/wiki/Bullfighting"
+  },
+  {
+    "id": "sahara",
+    "claim": "The Sahara is the largest desert on Earth.",
+    "expected": "FALSE",
+    "accepted": [
+      "FALSE",
+      "MISLEADING",
+      "PARTIALLY TRUE"
+    ],
+    "topic": "geography",
+    "reference": "https://en.wikipedia.org/wiki/Desert"
+  },
+  {
+    "id": "water-always",
+    "claim": "Water freezes at 0 degrees Celsius under every condition.",
+    "expected": "PARTIALLY TRUE",
+    "accepted": [
+      "PARTIALLY TRUE",
+      "FALSE",
+      "MISLEADING"
+    ],
+    "topic": "science",
+    "reference": "https://water.usgs.gov/gotita/waterproperties.html"
+  },
+  {
+    "id": "pluto",
+    "claim": "The current IAU classification lists Pluto as the ninth planet.",
+    "expected": "OUTDATED",
+    "accepted": [
+      "OUTDATED",
+      "FALSE"
+    ],
+    "topic": "space",
+    "reference": "https://iauarchive.eso.org/news/pressreleases/detail/iau0603/"
+  },
+  {
+    "id": "dreams",
+    "claim": "Exactly 123 people worldwide dreamed about the Eiffel Tower last night.",
+    "expected": "UNVERIFIABLE",
+    "accepted": [
+      "UNVERIFIABLE"
+    ],
+    "topic": "uncheckable",
+    "reference": "No measurement exists."
+  }
+]

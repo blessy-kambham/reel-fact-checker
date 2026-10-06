@@ -97,7 +97,7 @@ backend/
     budget.py            spending reservations and the daily ledger
     history.py           saved reports (SQLite)
     access.py            password sign-in, sessions, rate limits
-  evaluation/            offline policy cases and the live validation runner
+  evaluation/            offline policy cases, the live validation runner and the scorecard
   tests/                 offline tests with scripted providers
 frontend/
   src/                   the single-page app (main, Report, History, styles)
@@ -171,7 +171,7 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 413 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 435 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
 npx playwright install chromium && npm run test:e2e   # 17 browser tests, mocked backend
