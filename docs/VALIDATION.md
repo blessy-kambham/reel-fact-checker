@@ -86,6 +86,18 @@ After the limit for a typed submission was raised from three claims to five, I s
 
 All five claims were extracted word for word and researched three at a time. The report took 100 seconds, 113 model calls and 12 searches, and cost about 15 cents. Four verdicts were correct and none was wrong. The withheld one shows the cost of the strictest rule: the verifier was right to reject the passage, but the claim lost a verdict that three good passages supported. That rule was changed after the scorecard: a rejected passage is now left out and the rest decide.
 
+### Explanations and the balance of evidence
+
+After each verdict began to carry an explanation and a for/against balance, I ran three scorecard claims again on 6 October and read each explanation against the evidence it cites.
+
+| Claim | Result | Explanation | Balance (sites, weight) |
+| --- | --- | --- | --- |
+| Mount Everest is the highest mountain on Earth above sea level | TRUE | Three sentences, one each for Wikipedia, Britannica and a third site, each saying what its passage says | Supporting 3 sites, 1.80; contradicting none |
+| Vaccines cause autism | FALSE | Four sentences over nine passages. Faithful to them, but it calls the sources "reliable", which is the model's word: all three sites are unrated here and the verdict's confidence is low | Supporting none; contradicting 3 sites, 1.50 |
+| Sound cannot travel through a vacuum | PARTIALLY TRUE | Two sentences: the textbook answer from three passages, then the 2023 experiment from two | Supporting 2 sites, 1.40; contradicting 2 sites, 1.00 |
+
+All three explanations passed the citation check, so none was withheld, and I found no sentence that went beyond its evidence apart from that adjective. Three claims is a look, not a measurement. The check confirms that each sentence points at verified evidence the verdict cites; reading them is still the only way to tell whether a sentence is a fair account of it. The three claims cost 11 cents.
+
 ### Videos
 
 Three generated Reel-format videos with known answers, run on a laptop with ffmpeg and the Whisper `small` model.
