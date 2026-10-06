@@ -12,7 +12,7 @@ These are engineering checks on a handful of cases. They are not an accuracy ben
 - **Full traces.** Each run saved the extraction, the searches, the pages read, every accepted and rejected citation, token usage and latency. Traces contain third-party page text and are not committed.
 - **Reference claims.** `backend/evaluation/real_cases.json` holds twelve starter claims with reference sources (NASA, USGS, the IAU, the Eiffel Tower's operator). Reference verdicts were never shown to the model.
 
-All sessions together cost roughly $0.60 in model usage.
+All sessions together cost roughly $0.75 in model usage.
 
 ## What went wrong, and what changed
 
@@ -69,6 +69,20 @@ After sources began to be rated by where they come from, I re-ran the Great Wall
 | The Great Wall of China is visible from the Moon with the naked eye | FALSE | The same reel came back in both searches, labelled as social media, and the research agent did not read it. The verdict cited Britannica and two unrated sites: source strength moderate, source score 60. |
 
 The run took 24 model calls, 2 searches, 53 seconds and about two cents. One of the unrated sites is a magazine from an established publisher that is not on the lists, which shows their limit: a site that is not listed is rated as unknown, not as poor.
+
+### Five statements in one submission
+
+After the limit for a typed submission was raised from three claims to five, I submitted five one-sentence statements together on 6 October, through the normal app.
+
+| Claim | Result | Notes |
+| --- | --- | --- |
+| The Great Wall of China is visible from the Moon with the naked eye | FALSE | Six passages from four sites |
+| Mount Everest is the highest mountain on Earth above sea level | Verdict withheld | Three passages from Wikipedia and Britannica were verified. A fourth selection pointed at a list of image captions that did not say what it was cited for; the citation verifier rejected it, and one failed citation withholds the verdict |
+| Water boils at 100 degrees Celsius at sea level | TRUE | Four passages from three sites |
+| The Eiffel Tower is in Berlin | FALSE | Cited the tower's own site and Wikipedia; also cited pages about a replica in Berlin, which are background at best |
+| Humans have walked on the Moon | TRUE | All six passages came from one Wikipedia page, so the report flags a single source |
+
+All five claims were extracted word for word and researched three at a time. The report took 100 seconds, 113 model calls and 12 searches, and cost about 15 cents. Four verdicts were correct and none was wrong. The withheld one shows the cost of the strictest rule: the verifier was right to reject the passage, but the claim lost a verdict that three good passages supported.
 
 ### Videos
 
