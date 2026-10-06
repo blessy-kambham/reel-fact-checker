@@ -49,9 +49,21 @@ class Analysis(StrictModel):
     evidence: list[EvidenceSelection] = Field(max_length=6)
     limitations: list[str] = Field(max_length=6)
 
+def _required(schema: dict) -> None:
+    """Keeps a field required in the schema sent to the model while code and tests may leave it out."""
+    schema.pop('default', None)
+
+
+class CitedSentence(StrictModel):
+    """One sentence of a verdict's explanation, with the evidence it rests on kept apart from the words."""
+    text: str = Field(description='One short plain-English sentence. Say nothing the cited evidence does not say. Do not put evidence IDs in the text.')
+    evidence_ids: list[str] = Field(description='IDs of the verified evidence this sentence rests on, such as E1. At least one.')
+
+
 class VerdictDecision(StrictModel):
     verdict: Verdict
     evidence_ids: list[str] = Field(max_length=12, description='IDs from the verified evidence that justify this verdict. Never invent IDs.')
+    explanation: list[CitedSentence] = Field(default_factory=list, json_schema_extra=_required, description='Why the verified evidence leads to this verdict, as two to four sentences, each with the evidence it rests on. Empty for UNVERIFIABLE and when no verdict is issued.')
 
 # ---- Agent actions: one step chosen by an agent. `tool` names the tool; the other fields are its arguments.
 # Free text has no length limit here; the application truncates whatever it stores or passes on. ----
@@ -98,6 +110,7 @@ class VerdictAction(StrictModel):
     evidence_ids: list[str] = Field(max_length=12, description='issue_verdict only: IDs from the verified evidence that justify this verdict. Never invent IDs.')
     missing: str = Field(description='request_evidence only: the specific evidence that would settle the target assertion. Empty otherwise.')
     looking_for: Literal['supporting', 'contradicting'] = Field(description='request_evidence only: the kind of evidence that is missing.')
+    explanation: list[CitedSentence] = Field(default_factory=list, json_schema_extra=_required, description='Why the verified evidence leads to this verdict, as two to four sentences, each with the evidence it rests on. Empty for UNVERIFIABLE and when no verdict is issued.')
 
 class ContentAction(StrictModel):
     """One step chosen by the content extractor after its first look at a video."""
@@ -187,12 +200,24 @@ class ClaimResult(StrictModel):
     evidence_strength: Literal['strong', 'moderate', 'weak'] | None = None
     source_score: int | None = Field(default=None, description='Average rating of the sites the verdict cites, 0-100.')
     # How much weight an issued verdict can bear: a rule over the evidence (services/summary.py), not a probability.
+    # The verdict agent's short account of an issued verdict. Shown only when every sentence cites verified evidence.
+    explanation: str | None = None
+    # Where the verified evidence points: sites and summed credibility weight on each side, each site counted once.
+    evidence_balance: 'EvidenceBalance | None' = None
     confidence: Literal['high', 'medium', 'low'] | None = None
     confidence_reasons: list[str] = Field(default_factory=list)
     # Set when the result of an identical claim, checked earlier, is shown again without new research.
     claim_key: str | None = Field(default=None, description='Fingerprint of the claim and its context, used to recognise a repeat.')
     reused_from: str | None = Field(default=None, description='ID of the report this result was first produced for.')
     first_checked_at: str | None = None
+
+class SideWeight(StrictModel):
+    sites: int
+    weight: float
+
+class EvidenceBalance(StrictModel):
+    supporting: SideWeight
+    contradicting: SideWeight
 
 class InputSpan(StrictModel):
     start: int
@@ -239,4 +264,5 @@ class ScreenText(StrictModel):
 class ArticleRequest(StrictModel):
     url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
+ClaimResult.model_rebuild()
 Report.model_rebuild()

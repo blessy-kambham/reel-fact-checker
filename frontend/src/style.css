@@ -248,6 +248,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
 .overall-verdict .overall-label { font-weight: 700; color: var(--plum); }
 .overall-verdict .verdict { margin: 0; }
 .overall-verdict .overall-summary { flex-basis: 100%; }
+.explanation { margin: 4px 0 14px; font-size: 16px; line-height: 1.65; color: var(--plum); max-width: 62ch; }
+.evidence-balance { margin: 8px 0 14px; max-width: 62ch; }
+.balance-labels { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--plum); }
+.balance-bar { display: block; width: 100%; height: 12px; border-radius: 999px; overflow: hidden; }
+.balance-for { fill: var(--mint-ink); }
+.balance-against { fill: var(--cherry); }
+.balance-note { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--mauve); }
 .confidence { margin: 12px 0 2px; font-size: 14px; line-height: 1.6; color: var(--mauve); max-width: 62ch; }
 .confidence strong { color: var(--plum); text-transform: capitalize; }
 .confidence.confidence-low strong { color: var(--raspberry); }

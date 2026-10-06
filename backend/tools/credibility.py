@@ -140,6 +140,23 @@ def accepted_as_evidence(url: str | None) -> bool:
     return rate(url).tier != 'user_generated'
 
 
+def _by_site(urls) -> dict:
+    """The rating of each different site among `urls`. Pages in two categories on one domain (a journal
+    index on a government site) count once, at the higher weight."""
+    ratings = {}
+    for url in urls:
+        if site(url):
+            ratings[domain(url)] = max(ratings.get(domain(url), SOCIAL_MEDIA), rate(url), key=lambda rating: rating.weight)
+    return ratings
+
+
+def weigh(urls) -> tuple[int, float]:
+    """How much one side of the evidence weighs: (different sites, the sum of their weights). Each site
+    counts once however many passages come from it, so repeating one page adds nothing."""
+    ratings = _by_site(urls)
+    return len(ratings), round(sum(rating.weight for rating in ratings.values()), 2)
+
+
 def assess(urls) -> tuple[str | None, int | None]:
     """How strong the sources behind a verdict are, from the pages it cites.
 
@@ -148,11 +165,7 @@ def assess(urls) -> tuple[str | None, int | None]:
     with none. Score: the sites' average weight as 0-100. Both describe the sources, not the
     chance that the verdict is right. Returns (None, None) when no page is cited.
     """
-    ratings = {}
-    for url in urls:
-        if site(url):
-            # Pages in two categories on one domain (a journal index on a government site) count once, at the higher weight.
-            ratings[domain(url)] = max(ratings.get(domain(url), SOCIAL_MEDIA), rate(url), key=lambda rating: rating.weight)
+    ratings = _by_site(urls)
     if not ratings:
         return None, None
     rated = sum(rating.tier in RATED_TIERS for rating in ratings.values())

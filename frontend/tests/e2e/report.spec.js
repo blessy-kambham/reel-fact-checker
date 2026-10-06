@@ -220,6 +220,8 @@ test('overall verdict, confidence, reuse and source weights are shown', async ({
     { overall_verdict: 'PARTIALLY TRUE', overall_summary: 'Of 2 claims: 1 true, 1 false.' },
     { confidence: 'medium', confidence_reasons: ['it rests on 2 sites, fewer than 3', 'two or more of them are official, academic or established sources'],
       reused_from: 'earlier-report', first_checked_at: '2026-10-05T09:30:00+00:00',
+      explanation: 'The tower measures 300 metres [E1].',
+      evidence_balance: { supporting: { sites: 2, weight: 1.45 }, contradicting: { sites: 1, weight: 0.5 } },
       evidence: [{ ...first, source_tier: 'official', source_label: 'Government or intergovernmental body', source_weight: 0.95 }, second] })) });
   await page.goto('/');
   await page.getByLabel('Your statement').fill('Claim');
@@ -230,6 +232,10 @@ test('overall verdict, confidence, reuse and source weights are shown', async ({
   await expect(page.getByText(/it rests on 2 sites, fewer than 3; two or more of them/)).toBeVisible();
   await expect(page.getByText(/A rule based on the evidence, not a measured probability/)).toBeVisible();
   await expect(page.getByText('Checked before.')).toBeVisible();
+  await expect(page.locator('.explanation')).toHaveText('The tower measures 300 metres [E1].');
+  await expect(page.getByText('Supporting: 2 sites, weight 1.45')).toBeVisible();
+  await expect(page.getByText('Contradicting: 1 site, weight 0.50')).toBeVisible();
+  await expect(page.locator('.balance-for')).toHaveAttribute('width', '74');
   await expect(page.getByText(/Government or intergovernmental body · credibility weight 0\.95/)).toBeVisible();
 });
 
@@ -243,6 +249,8 @@ test('reports without the newer fields show none of those lines', async ({ page 
   await expect(page.getByText(/Confidence:/)).toHaveCount(0);
   await expect(page.getByText('Checked before.')).toHaveCount(0);
   await expect(page.getByText(/credibility weight/)).toHaveCount(0);
+  await expect(page.locator('.explanation')).toHaveCount(0);
+  await expect(page.locator('.evidence-balance')).toHaveCount(0);
 });
 
 test('reports without source ratings show no strength line', async ({ page }) => {

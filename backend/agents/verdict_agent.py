@@ -4,6 +4,11 @@ Gives the verdict for one claim. It sees only the claim and the evidence that pa
 not the rest of the submission, the analyst's proposed verdict or the research notes. It must cite
 the evidence IDs it relied on, and the application checks that those citations justify the verdict.
 
+With the verdict it writes a short explanation as separate sentences, each carrying the IDs of the
+verified evidence it rests on. Keeping the IDs apart from the words lets the application check them
+without guessing where a sentence ends. The explanation is shown only if every sentence passes: a
+verdict never depends on its explanation, so a bad one is left out rather than costing the verdict.
+
 The agent chooses between two tools. `issue_verdict` gives the verdict. `request_evidence`, offered
 only while another research round is possible, says the evidence does not settle the claim and names
 what is missing, so the orchestrator can send the claim back for research. When the application
@@ -14,6 +19,7 @@ Used by: `agents/orchestrator.py`, after citation verification.
 """
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 
 from schemas import VerdictAction, VerdictDecision
@@ -42,10 +48,37 @@ VERDICT_INSTRUCTIONS = (
     'A true assertion does not become misleading because a different assertion might be false. '
     'Background alone cannot establish a verdict. Conflicting evidence warrants UNVERIFIABLE unless '
     'the supplied evidence resolves the conflict. Return the evidence IDs supporting the decision. '
-    'Do not use outside knowledge; source repetition is not independent confirmation.')
+    'Do not use outside knowledge; source repetition is not independent confirmation. '
+    'Then give "explanation": two to four short plain-English sentences saying why the evidence leads to the verdict, '
+    'one sentence per item. With each sentence list the IDs of the evidence it rests on, taken from the evidence IDs '
+    'you returned, and say nothing that evidence does not say. Leave it empty for UNVERIFIABLE.')
 TOOL_INSTRUCTIONS = VERDICT_INSTRUCTIONS + (
     ' Choose exactly ONE tool from "tools". Prefer issue_verdict whenever the verified evidence settles the target. '
     'If "last_step" says a verdict was refused, issue the same verdict again with corrected evidence IDs.')
+
+
+MAX_SENTENCE_CHARS = 300
+MAX_SENTENCES = 4   # a longer answer is cut here rather than refused
+EXPLANATION_REJECTED = 'The explanation written for this verdict did not rest every sentence on the evidence the verdict cites, so it is not shown.'
+
+
+def checked_explanation(sentences, cited_ids, usable) -> str | None:
+    """The explanation as one paragraph, each sentence followed by its evidence IDs, or None.
+
+    Every sentence must say something and must rest on evidence that passed verification and that the
+    verdict itself cites. One sentence that does not, and nothing is shown. This checks where each
+    sentence points. It cannot check that the sentence says what that evidence says, which is why the
+    report shows the evidence beside it.
+    """
+    allowed = {c.evidence_id for c in usable} & {str(i).strip().upper() for i in cited_ids}
+    written = []
+    for sentence in (sentences or [])[:MAX_SENTENCES]:
+        text = ' '.join(re.sub(r'\[\s*E\d+(?:\s*,\s*E\d+)*\s*\]', '', sentence.text, flags=re.I).split())
+        ids = list(dict.fromkeys(str(i).strip().upper() for i in sentence.evidence_ids))
+        if not re.search(r'[^\W\d_]', text) or len(text) > MAX_SENTENCE_CHARS or not ids or not set(ids) <= allowed:
+            return None
+        written.append(f"{text.rstrip('. ')} {''.join(f'[{i}]' for i in ids)}.")
+    return ' '.join(written) or None
 
 
 def check_decision(decision, usable):
@@ -77,6 +110,8 @@ class VerdictOutcome:
     withheld: str | None = None           # a WithheldReason when the verdict may not be issued
     request: str | None = None            # set instead of a verdict: the evidence the agent says is missing
     looking_for: str = 'supporting'
+    explanation: str | None = None        # shown with an issued verdict; None when absent or not properly cited
+    explanation_rejected: bool = False    # an explanation was written but failed the citation check
 
 
 class VerdictAgent:
@@ -104,8 +139,10 @@ class VerdictAgent:
     @staticmethod
     def _outcome(decision, usable) -> VerdictOutcome:
         # Model-supplied strings: bound them before storing them in a report.
+        explanation = checked_explanation(decision.explanation, decision.evidence_ids, usable)
         return VerdictOutcome(verdict=decision.verdict, evidence_ids=[str(i)[:32] for i in decision.evidence_ids],
-                              withheld=check_decision(decision, usable))
+                              withheld=check_decision(decision, usable), explanation=explanation,
+                              explanation_rejected=explanation is None and bool(decision.explanation))
 
     async def _choose(self, data: dict, usable: list, can_request: bool, steps: list) -> VerdictOutcome:
         """The agent's tool loop: issue a verdict, or ask for the evidence that is missing."""

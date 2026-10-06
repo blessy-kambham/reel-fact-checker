@@ -32,7 +32,7 @@ import hashlib
 import time
 from uuid import uuid4
 
-from schemas import Citation, ClaimResult, OrchestratorAction, Report
+from schemas import Citation, ClaimResult, EvidenceBalance, OrchestratorAction, Report, SideWeight
 from services.budget import BudgetExceeded
 from tools.fetcher import fetch_text
 from services.input_mapping import map_input
@@ -47,7 +47,7 @@ from agents.research_agent import ResearchAgent
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
 from agents.shared import (COMPLETE_WITHHELD_REASONS, COPY_MARKER_MIN_WORDS, FEW_SITES_NOTE, INVALID_REFERENCE_CODES,
                            MAX_STATEMENT_CLAIMS, SINGLE_SOURCE_NOTE, SITE_GOAL, WITHHELD_MESSAGES, loose, now, unresolved)
-from agents.verdict_agent import VerdictAgent
+from agents.verdict_agent import EXPLANATION_REJECTED, VerdictAgent
 
 NAME = 'Orchestrator'
 MAX_PARALLEL_CLAIMS = 3    # five claims then finish within two time limits, inside the report's own limit
@@ -379,7 +379,12 @@ class _Case:
         if withheld:
             warnings.append(WITHHELD_MESSAGES[withheld])
         incomplete = pack.search_failed or (withheld is not None and withheld not in COMPLETE_WITHHELD_REASONS)
-        verdict_sources, verdict_sites, strength, score, level, reasons = None, None, None, None, None, []
+        verdict_sources, verdict_sites, strength, score, level, reasons, explanation = None, None, None, None, None, [], None
+        # Where the verified evidence points, whether or not a verdict is issued: each site once, at its weight.
+        sides = {stance: credibility.weigh(c.url for c in usable if c.stance == stance) for stance in ('FOR', 'AGAINST')}
+        balance = (EvidenceBalance(supporting=SideWeight(sites=sides['FOR'][0], weight=sides['FOR'][1]),
+                                   contradicting=SideWeight(sites=sides['AGAINST'][0], weight=sides['AGAINST'][1]))
+                   if sides['FOR'][0] or sides['AGAINST'][0] else None)
         if withheld is None:
             cited = [c for c in usable if c.evidence_id in decision_ids]
             verdict_sources = len({c.url or c.source_id for c in cited})
@@ -396,6 +401,9 @@ class _Case:
                 direct_strength = credibility.assess(c.url for c in cited if c.stance in ('FOR', 'AGAINST'))[0]
                 level, reasons = confidence(verdict_sites, direct_strength, {'FOR', 'AGAINST'} <= {c.stance for c in usable},
                                             rejected, len(usable) + rejected)
+                explanation = self.outcome.explanation
+                if self.outcome.explanation_rejected:
+                    warnings.append(EXPLANATION_REJECTED)
                 if strength == 'weak':
                     warnings.append(WEAK_SOURCES_NOTE)
         if not any(c.stance == 'AGAINST' for c in usable):
@@ -410,7 +418,7 @@ class _Case:
                            decision_verdict=decision_verdict, decision_evidence_ids=decision_ids,
                            verdict_evidence_ids=[] if withheld else decision_ids, verdict_source_count=verdict_sources,
                            verdict_site_count=verdict_sites, evidence_strength=strength, source_score=score,
-                           confidence=level, confidence_reasons=reasons)
+                           confidence=level, confidence_reasons=reasons, explanation=explanation, evidence_balance=balance)
 
 
 async def _direct(case: _Case) -> None:

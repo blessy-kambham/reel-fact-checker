@@ -13,6 +13,26 @@ function Evidence({ item, demo, cited }) {
   </article>;
 }
 
+// Where the verified evidence points: each site counted once, weighted by the kind of site it is.
+function EvidenceBalance({ balance }) {
+  if (!balance) return null;
+  const { supporting, contradicting } = balance;
+  const total = supporting.weight + contradicting.weight;
+  if (!total) return null;
+  const share = Math.round(100 * supporting.weight / total);
+  const side = (label, s) => `${label}: ${s.sites} ${s.sites === 1 ? 'site' : 'sites'}, weight ${s.weight.toFixed(2)}`;
+  return <div className="evidence-balance">
+    <p className="balance-labels"><span>{side('Supporting', supporting)}</span><span>{side('Contradicting', contradicting)}</span></p>
+    {/* Drawn with SVG attributes rather than inline styles, which the site's content security policy does not allow. */}
+    <svg className="balance-bar" viewBox="0 0 100 4" preserveAspectRatio="none" role="img"
+         aria-label={`${side('Supporting', supporting)}. ${side('Contradicting', contradicting)}.`}>
+      <rect className="balance-for" x="0" y="0" width={share} height="4" />
+      <rect className="balance-against" x={share} y="0" width={100 - share} height="4" />
+    </svg>
+    <p className="balance-note">All verified evidence on each side, whether or not the verdict cites it. Each site counts once, weighted by its source type. This shows where the evidence points, not how likely the claim is.</p>
+  </div>;
+}
+
 // What the agents chose to do, in order. Each line is "Agent name: what it did".
 function AgentSteps({ steps, label }) {
   if (!steps?.length) return null;
@@ -78,6 +98,8 @@ export default function Report({ report }) {
       <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'Example: ' : ''}{claim.verdict}</span>
       {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
       {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
+      {report.mode !== 'demo' && claim.explanation && <p className="explanation">{claim.explanation}</p>}
+      {report.mode !== 'demo' && <EvidenceBalance balance={claim.evidence_balance} />}
       {report.mode !== 'demo' && claim.reused_from && <p className="notice reused" role="note"><strong>Checked before.</strong> This claim was checked on {new Date(claim.first_checked_at).toLocaleDateString()}. That result is shown again; no new research was done.</p>}
       {report.mode !== 'demo' && claim.confidence && <p className={`confidence confidence-${claim.confidence}`}>
         <strong>Confidence: {claim.confidence}</strong>
