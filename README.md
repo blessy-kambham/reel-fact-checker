@@ -185,6 +185,21 @@ Passing tests show that the pipeline follows its rules. They do not measure fact
 
 I tested the pipeline against live providers in small, budgeted sessions, and used each failure to change the design. The latest rounds returned correct verdicts for the text claims they covered and for three test videos, including one with no audio. After the agents were given their own tools, two statements were re-run live and both returned correct, fully cited verdicts; the agents' less common choices, such as a second research round, are covered by offline tests only. Article mode produced one wrong verdict in its live run; its causes are fixed and tested offline but not yet re-run live. The full account, including what went wrong along the way, is in [docs/VALIDATION.md](docs/VALIDATION.md).
 
+## Scorecard
+
+I ran 30 claims with known answers through the live system and scored the result against the targets in the design brief.
+
+| Measure | Result | Target |
+| --- | --- | --- |
+| Right verdict | 25 of 30 (83%) | 85% or more |
+| Wrong verdict | 2, neither the opposite of the truth | |
+| No verdict when one was expected | 10% | under 15% |
+| Citation checks failed | 2% of 167 passages | under 5% |
+| Cost per claim | about 3 cents | under 15 cents |
+| Time per claim | median 46 s | under 120 s |
+
+The first pass scored 63%: seven claims were dropped when the model provider limited requests. After adding a wait-and-retry, those seven were run again and all were right. The set is small and made of well-known facts and myths, so this is a behaviour check, not an accuracy claim. Every claim, the misses and the method are in [docs/SCORECARD.md](docs/SCORECARD.md).
+
 ## Deployment
 
 One Docker image serves the website and the API on a single port. [docs/DEPLOY.md](docs/DEPLOY.md) covers the settings, HTTPS, volumes, backups and the Railway setup.
@@ -192,7 +207,7 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 ## Limitations
 
 - This is a demo, not a fact-checking service. Verdicts are automated and can be wrong; read the evidence.
-- The live validation set is small. It shows the pipeline working on specific cases, not a measured accuracy rate.
+- The scorecard and live validation sets are small and made of well-known claims. They show the system working on specific cases, not a measured accuracy rate.
 - Source credibility is a simple rule: sites are rated from short lists of known addresses, so most of the web is "unrated", and the rating says nothing about a particular page's accuracy. Several citations can come from one page.
 - The same model performs analysis and checking in separate calls, so correlated mistakes are possible.
 - Only HTML and plain-text pages are read. PDFs, paywalled pages and pages that need JavaScript are skipped.

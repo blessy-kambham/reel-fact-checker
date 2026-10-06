@@ -12,7 +12,7 @@ These are engineering checks on a handful of cases. They are not an accuracy ben
 - **Full traces.** Each run saved the extraction, the searches, the pages read, every accepted and rejected citation, token usage and latency. Traces contain third-party page text and are not committed.
 - **Reference claims.** `backend/evaluation/real_cases.json` holds twelve starter claims with reference sources (NASA, USGS, the IAU, the Eiffel Tower's operator). Reference verdicts were never shown to the model.
 
-All sessions together cost roughly $0.75 in model usage.
+All sessions together cost roughly $0.75 in model usage. A separate scored run of 30 claims is in [SCORECARD.md](SCORECARD.md).
 
 ## What went wrong, and what changed
 
@@ -102,7 +102,7 @@ One article, a NASA launch press release, was run live. Two of its three claims 
 
 ## What this does not show
 
-- **Accuracy at scale.** A dozen claims and three videos show the pipeline working on specific cases.
+- **Accuracy at scale.** These sessions and the 30-claim scorecard show the pipeline working on specific, mostly well-known cases.
 - **Citation precision.** Accepted citations passed automated checks. Nobody reviewed them by hand.
 - **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. Since then, social media pages are refused as evidence and each verdict reports the strength of its sources. That rating comes from short lists of known sites and has been checked live on one claim only.
 - **Real Reels.** The test videos were generated with clear speech. Background music, fast speech and brief captions are untested.
