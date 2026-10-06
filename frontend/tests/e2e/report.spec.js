@@ -198,3 +198,27 @@ test('evidence taken from the search provider copy is labelled', async ({ page }
   await page.getByRole('button', { name: /Research this claim/ }).click();
   await expect(page.getByText(/search provider's copy/)).toHaveCount(1);
 });
+
+test('source types and source strength are shown for an issued verdict', async ({ page }) => {
+  const [first, second] = report().claims[0].evidence;
+  await mockBackend(page, { factCheck: (route, json) => json(200, report({}, {
+    evidence_strength: 'moderate', source_score: 75,
+    evidence: [{ ...first, source_tier: 'official', source_label: 'Official, academic or peer-reviewed source' },
+               { ...second, source_tier: 'unrated', source_label: 'Unrated website' }] })) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Source strength: moderate')).toBeVisible();
+  await expect(page.getByText(/source score 75\/100/)).toBeVisible();
+  await expect(page.getByText('Source type: Official, academic or peer-reviewed source')).toBeVisible();
+});
+
+test('reports without source ratings show no strength line', async ({ page }) => {
+  await mockBackend(page, { factCheck: (route, json) => json(200, report()) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Your claim-by-claim report')).toBeVisible();
+  await expect(page.getByText(/Source strength/)).toHaveCount(0);
+  await expect(page.getByText(/Source type:/)).toHaveCount(0);
+});

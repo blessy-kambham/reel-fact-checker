@@ -26,6 +26,7 @@ from schemas import Citation, ClaimResult, OrchestratorAction, Report
 from services.budget import BudgetExceeded
 from tools.fetcher import fetch_text
 from services.input_mapping import map_input
+from tools import credibility
 from tools.providers import ProviderFailure
 
 from agents.analyst_agent import AnalystAgent
@@ -84,6 +85,18 @@ async def verify_selection(selection, sources, excerpts, provider, claim_text):
     # Independent attribution AND stance validation remains mandatory after classification.
     citation = await verify_citation(draft, sources, provider, claim_text)
     return citation.model_copy(update=metadata)
+
+
+WEAK_SOURCES_NOTE = ('None of the pages behind this verdict is from an official, academic, reference or established '
+                     'publisher. Check the sources before relying on it.')
+
+
+def _rated(citation: Citation) -> Citation:
+    """The citation with the kind of site its page is on."""
+    if not citation.url:
+        return citation
+    rating = credibility.rate(citation.url)
+    return citation.model_copy(update={'source_tier': rating.tier, 'source_label': rating.label})
 
 
 class _Case:
@@ -190,7 +203,7 @@ class _Case:
             # A second round is extra: when its pages cannot be analysed, the first round's evidence stands.
             self.pack.warnings.append('Pages from the second research round could not be analysed, so they were not used.')
             return 0, 0
-        self.passages += entries
+        self.passages += [_rated(e) if isinstance(e, Citation) else e for e in entries]
         self.log(AnalystAgent.name, notes)
         ready = sum(not isinstance(e, Citation) for e in entries)
         return ready, len(entries) - ready
@@ -205,7 +218,7 @@ class _Case:
             draft, metadata = passage
             # Independent attribution AND stance validation remains mandatory after classification.
             citation = await verifier.verify(draft, self.pack.sources, self.claim.text, notes, metadata['source_start'])
-            self.passages[index] = citation.model_copy(update=metadata)
+            self.passages[index] = _rated(citation.model_copy(update=metadata))
             verified, checked = verified + citation.verified, checked + 1
         self.log(CitationVerifierAgent.name, notes)
         return verified, checked
@@ -263,11 +276,17 @@ class _Case:
         if withheld:
             warnings.append(WITHHELD_MESSAGES[withheld])
         incomplete = pack.search_failed or (withheld is not None and withheld not in COMPLETE_WITHHELD_REASONS)
-        verdict_sources = None
+        verdict_sources, strength, score = None, None, None
         if withheld is None:
-            verdict_sources = len({c.url or c.source_id for c in usable if c.evidence_id in decision_ids})
-            if verdict != 'UNVERIFIABLE' and verdict_sources == 1:
-                warnings.append(SINGLE_SOURCE_NOTE)
+            cited = [c for c in usable if c.evidence_id in decision_ids]
+            verdict_sources = len({c.url or c.source_id for c in cited})
+            if verdict != 'UNVERIFIABLE':
+                # Source credibility: how strong the sites behind the verdict are. It never changes the verdict.
+                strength, score = credibility.assess(c.url for c in cited)
+                if verdict_sources == 1:
+                    warnings.append(SINGLE_SOURCE_NOTE)
+                if strength == 'weak':
+                    warnings.append(WEAK_SOURCES_NOTE)
         if not any(c.stance == 'AGAINST' for c in usable):
             warnings.append('No verified contradicting evidence was identified in the retrieved pages. This does not prove the claim.')
         warnings.append('Citation checks use quote matching and a separate model judgment; human review may still find errors.')
@@ -278,7 +297,8 @@ class _Case:
                            agent_steps=list(self.steps), verdict_state='withheld' if withheld else 'issued', withheld_reason=withheld,
                            withheld_message=WITHHELD_MESSAGES[withheld] if withheld else None,
                            decision_verdict=decision_verdict, decision_evidence_ids=decision_ids,
-                           verdict_evidence_ids=[] if withheld else decision_ids, verdict_source_count=verdict_sources)
+                           verdict_evidence_ids=[] if withheld else decision_ids, verdict_source_count=verdict_sources,
+                           evidence_strength=strength, source_score=score)
 
 
 async def _direct(case: _Case) -> None:

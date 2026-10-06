@@ -9,6 +9,7 @@ I built this as a portfolio project to explore a question I care about: how do y
 - **Three kinds of input.** A typed statement, a public article URL, or an uploaded video (MP4, MOV or WebM, up to 3 minutes).
 - **Video understanding.** Speech is transcribed locally with Whisper, on-screen text is read from keyframes, and an optional caption is included, so a silent Reel with text overlays works too.
 - **Claim-by-claim reports.** Up to three claims per submission, each with a verdict (`TRUE`, `FALSE`, `PARTIALLY TRUE`, `MISLEADING`, `OUTDATED` or `UNVERIFIABLE`), the passages the verdict rests on, and links to their sources.
+- **Source credibility.** Every page is rated by where it comes from (official or academic, established publisher, unrated, social media). Social media pages are never used as evidence, and each verdict shows how strong its sources are.
 - **Verdicts can be withheld.** If citations fail their checks, sources cannot be read, or the evidence conflicts, the report gives the reason instead of a verdict.
 - **Saved reports.** Live reports are stored in SQLite and can be reopened, printed, saved as PDF or downloaded as JSON.
 - **A free demo mode.** A fictional example report that needs no API keys and makes no external calls.
@@ -51,6 +52,7 @@ These are the choices that shaped the project, most of them made after a live te
 - **Claims must be verbatim.** Extracted claims are checked against the original text, so the model cannot quietly drop, soften or rewrite an assertion. Minor differences in quotes, apostrophes and dashes are tolerated.
 - **Agents choose, the application enforces.** A model only ever picks a tool; the application runs it. So the research agent can plan its searches but cannot finish without looking for contradicting evidence or read a page no search returned; the orchestrator can reroute a claim but cannot skip verification; and the verdict agent can ask for more evidence but cannot change its verdict to get past a refused citation.
 - **Withhold rather than guess.** Each claim reports whether its verdict was issued or withheld, with a specific reason such as `no_sources`, `citation_failed` or `conflicting_evidence`. A verdict resting on a single page is flagged.
+- **Credibility is a stated rule, not a guess.** Sources are rated from their web address against short, published lists in [`backend/tools/credibility.py`](backend/tools/credibility.py). The rating keeps social media out of the evidence and labels each verdict's sources as strong, moderate or weak, but it never changes a verdict and is not presented as the chance that a verdict is right.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
 - **Blocked pages fall back transparently.** When a site refuses the app's fetcher, the search provider's extracted text for that page is used instead, and the report labels that evidence.
 - **Spending is capped before it happens.** Every model and search call reserves its worst-case cost against a daily ledger before it runs and is reconciled afterwards. When the cap is reached, research stops for the day.
@@ -85,6 +87,7 @@ backend/
     providers.py         OpenAI and Tavily adapters
     fetcher.py           safe page fetching
     excerpts.py          numbered excerpts with character offsets
+    credibility.py       source ratings and evidence strength
     media.py             ffmpeg validation, audio and keyframe extraction
     transcribe.py        local Whisper transcription
   services/              application plumbing
@@ -168,13 +171,13 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 368 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 413 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
-npx playwright install chromium && npm run test:e2e   # 15 browser tests, mocked backend
+npx playwright install chromium && npm run test:e2e   # 17 browser tests, mocked backend
 ```
 
-The backend tests use scripted providers, so they run offline and cost nothing. They cover input validation, claim mapping, citation checks, verdict gating, spending limits, history, access control, article and video ingestion, the safe fetcher, and each agent's choices together with the limits on them. The policy cases pin down how the pipeline must behave in specific situations, such as invented source IDs, misattributed quotes, search outages and conflicting evidence. GitHub Actions runs the backend tests, the policy cases and the frontend build on every push.
+The backend tests use scripted providers, so they run offline and cost nothing. They cover input validation, claim mapping, citation checks, verdict gating, spending limits, history, access control, article and video ingestion, the safe fetcher, source ratings, and each agent's choices together with the limits on them. The policy cases pin down how the pipeline must behave in specific situations, such as invented source IDs, misattributed quotes, search outages and conflicting evidence. GitHub Actions runs the backend tests, the policy cases and the frontend build on every push.
 
 Passing tests show that the pipeline follows its rules. They do not measure factual accuracy; see below.
 
@@ -190,15 +193,15 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 
 - This is a demo, not a fact-checking service. Verdicts are automated and can be wrong; read the evidence.
 - The live validation set is small. It shows the pipeline working on specific cases, not a measured accuracy rate.
-- Source quality is judged only by the model's instructions. There is no credibility scoring, and several citations can come from one page.
+- Source credibility is a simple rule: sites are rated from short lists of known addresses, so most of the web is "unrated", and the rating says nothing about a particular page's accuracy. Several citations can come from one page.
 - The same model performs analysis and checking in separate calls, so correlated mistakes are possible.
 - Only HTML and plain-text pages are read. PDFs, paywalled pages and pages that need JavaScript are skipped.
 - Video needs a file upload. Instagram offers no official way to download other people's Reels, so pasting a Reel link is not supported.
-- Whisper can mishear fast speech or speech over loud music, and on-screen text is read from four keyframes, so brief captions can be missed.
+- Whisper can mishear fast speech or speech over loud music, and on-screen text is read from four keyframes (twelve when the content extractor asks for a closer look), so brief captions can be missed.
 - One server process handles one report at a time, with in-memory rate limits. That suits a demo, not public traffic.
 
 ## What I would do next
 
-- Score source credibility and require independent sources for a verdict.
+- Rate sources from more than their address (author, date, citations) and require independent sources for a verdict.
 - Review accepted citations by hand on a larger reference set to measure precision.
-- Read more keyframes for videos with fast-changing text.
+- Test real Reels with background music, fast speech and fast-changing text.

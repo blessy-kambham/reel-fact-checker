@@ -61,6 +61,7 @@ The agents are free to plan. These rules are code, and no agent can choose its w
 
 - **No stage is skipped.** Pages must be analysed and passages verified before a verdict. Whatever the orchestrator chooses, any stage left out is run afterwards in the standard order.
 - **Both sides are researched.** The research agent may not finish before searching for contradicting as well as supporting evidence; a direction it skips is searched for it.
+- **Social media is not evidence.** Every page is rated by where it comes from ([`tools/credibility.py`](../tools/credibility.py)). The research agent sees each result's source type, and pages on social media or other user-generated platforms are refused whatever it chooses.
 - **Quotes are copied, not written.** Agents pick excerpt IDs; the application copies the text from the page. Only pages a search returned can be read.
 - **A verdict needs verified evidence.** It is withheld, with a named reason, if a search or a citation failed, if no verified passage bears on the claim, or if the cited evidence does not justify it. A verdict agent that cited evidence IDs that do not exist may cite again, but it may not change its verdict to get past the check.
 - **Every passage is read in full context at least once.** The citation verifier may decide from the text around a quote, but the analyst's relation check always reads the whole page, and a passage counts only if both agree.

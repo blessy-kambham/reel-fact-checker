@@ -10,6 +10,8 @@ WithheldReason = Literal['coverage_failed', 'no_sources', 'search_failed', 'cita
                          'evidence_stance_mismatch', 'conflicting_evidence', 'claim_timeout', 'provider_failure',
                          'spending_limit']
 
+SourceTier = Literal['official', 'established', 'unrated', 'user_generated']
+
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -116,7 +118,9 @@ class Source(StrictModel):
     url: str | None
     text: str
     retrieved_at: str
-    source_type: str = 'Unrated; assess methodology and relevance'
+    # Where the page comes from, rated from its address by tools/credibility.py. Not a judgement of the page.
+    source_type: str = 'Unrated website'
+    source_tier: SourceTier = 'unrated'
     # 'search_copy': the page refused the app's fetcher, so the search provider's extracted text was used.
     retrieval: Literal['fetched', 'search_copy'] = 'fetched'
 
@@ -138,6 +142,9 @@ class Citation(EvidenceDraft):
     retrieved_at: str | None = None
     retrieval: Literal['fetched', 'search_copy'] | None = None
     source_text_sha256: str | None = None
+    # The kind of site the page is on (tools/credibility.py). None in reports saved before sources were rated.
+    source_tier: SourceTier | None = None
+    source_label: str | None = None
 
 class ClaimResult(StrictModel):
     claim: str
@@ -168,6 +175,9 @@ class ClaimResult(StrictModel):
     decision_evidence_ids: list[str] = Field(default_factory=list, description='Raw evidence IDs returned by the verdict stage, including rejected ones.')
     verdict_evidence_ids: list[str] = Field(default_factory=list, description='Evidence IDs justifying an issued verdict; empty when withheld.')
     verdict_source_count: int | None = Field(default=None, description='Distinct pages behind an issued verdict; None when withheld.')
+    # How strong the sources behind an issued verdict are. Describes the sources, not the chance the verdict is right.
+    evidence_strength: Literal['strong', 'moderate', 'weak'] | None = None
+    source_score: int | None = Field(default=None, description='Average rating of the sites the verdict cites, 0-100.')
 
 class InputSpan(StrictModel):
     start: int

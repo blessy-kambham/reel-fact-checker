@@ -8,6 +8,7 @@ function Evidence({ item, demo, cited }) {
     <blockquote>{item.quote}</blockquote>
     {item.url?.startsWith('https://') ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a> : <strong>{item.title}</strong>}
     <p className="verification">{demo ? 'Demo fixture' : item.verified ? 'Quote and attribution checked' : 'Unverified'} · {item.verification}</p>
+    {item.source_label && <p className={`verification source-type source-${item.source_tier}`}>Source type: {item.source_label}</p>}
     {item.retrieval === 'search_copy' && <p className="verification">Page text from the search provider's copy (the site refused a direct fetch).</p>}
   </article>;
 }
@@ -73,6 +74,9 @@ export default function Report({ report }) {
       <span className={`verdict verdict-${claim.verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.mode === 'demo' ? 'Example: ' : ''}{claim.verdict}</span>
       {report.mode !== 'demo' && claim.verdict_state === 'withheld' && <p className="notice withheld" role="note"><strong>Verdict withheld.</strong> {claim.withheld_message || 'The verdict could not be established.'}</p>}
       {report.mode !== 'demo' && claim.verdict_state === 'issued' && claim.verdict !== 'UNVERIFIABLE' && claim.verdict_source_count === 1 && <p className="notice withheld" role="note"><strong>Single source.</strong> This verdict rests on one web page. Check it before relying on the verdict.</p>}
+      {report.mode !== 'demo' && claim.evidence_strength && <p className={`source-strength strength-${claim.evidence_strength}`}>
+        <strong>Source strength: {claim.evidence_strength}</strong> · source score {claim.source_score}/100
+        <span> — rates where the cited pages come from, not how likely the verdict is to be right.</span></p>}
       <p className="report-meta">{claim.sources_checked} {claim.sources_checked === 1 ? 'page' : 'pages'} read</p>
       {(() => {
         const demo = report.mode === 'demo';

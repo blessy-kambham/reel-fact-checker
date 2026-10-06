@@ -80,7 +80,7 @@ One article, a NASA launch press release, was run live. Two of its three claims 
 
 - **Accuracy at scale.** A dozen claims and three videos show the pipeline working on specific cases.
 - **Citation precision.** Accepted citations passed automated checks. Nobody reviewed them by hand.
-- **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. The report flags single-source verdicts but does not score credibility.
+- **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. Since then, social media pages are refused as evidence and each verdict reports the strength of its sources, but that rating comes from short lists of known sites and has not been checked against the live runs above.
 - **Real Reels.** The test videos were generated with clear speech. Background music, fast speech and brief captions are untested.
 
 ## Reproducing a session

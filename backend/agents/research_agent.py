@@ -11,6 +11,7 @@ The agent is free to plan, but it works inside limits the application enforces:
 - it can only read pages that a search returned, never an arbitrary address;
 - it may not finish before searching for contradicting as well as supporting evidence, and any
   search it skips is run for it afterwards;
+- pages on social media and other user-generated platforms are not accepted as evidence (`tools/credibility.py`);
 - it gathers pages only. Judging the claim is left to the analyst, citation verifier and verdict agents.
 
 The orchestrator can send a claim back for a second, shorter round with a note on what is still
@@ -27,6 +28,8 @@ from schemas import ResearchAction, Source
 from services.budget import BudgetExceeded
 from tools.fetcher import fetch_text
 from tools.providers import ProviderFailure
+
+from tools import credibility
 
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
 from agents.shared import COPY_MARKER_MIN_WORDS, loose, now, page_key
@@ -60,7 +63,8 @@ PLANNING_INSTRUCTIONS = (
     'Write focused queries of your own: name the specific person, place, number or date in the claim. '
     'You must look for evidence against the claim as well as for it. '
     'Read the results most likely to settle the claim: prefer primary, official and well-established sources, '
-    'and skip forums, reposts and pages that do not address the claim. '
+    'and skip forums, reposts and pages that do not address the claim. Each result shows its source_type; social '
+    'media and user-generated pages are never accepted as evidence, so do not spend reads on them. '
     'If a search returns nothing useful, try a different angle instead of repeating a query. '
     'Finish when pages from both a supporting and a contradicting search have been read, or when nothing more '
     'useful can be found within "remaining". When "request" is present, earlier research left a gap: spend this '
@@ -218,6 +222,7 @@ class ResearchAgent:
             'searches': [{'query': query, 'looking_for': LOOKING_FOR[direction],
                           'results': [{'id': i, 'title': str(by_id[i].hit.get('title', ''))[:150],
                                        'url': by_id[i].hit.get('url', ''),
+                                       'source_type': credibility.rate(by_id[i].hit.get('url', '')).label,
                                        'snippet': ' '.join(str(by_id[i].hit.get('content', '')).split())[:300],
                                        'read': by_id[i].read} for i in ids]}
                          for query, direction, ids in run.searches],
@@ -267,6 +272,9 @@ class ResearchAgent:
         if len(sources) >= run.page_limit:
             return
         url = result.hit.get('url', '')
+        if not credibility.accepted_as_evidence(url):
+            warnings.append('A social media or user-generated page was not accepted as evidence.')
+            return
         try:
             retrieval = 'fetched'
             try:
@@ -276,12 +284,16 @@ class ResearchAgent:
                 retrieval = 'search_copy'
             if any(s.url == final_url for s in sources.values()) or page_key(final_url) in run.exclude:
                 return
+            if not credibility.accepted_as_evidence(final_url):
+                warnings.append('A social media or user-generated page was not accepted as evidence.')
+                return
             if run.markers and any(marker in loose(text) for marker in run.markers):
                 warnings.append('A page repeating the checked material word for word was treated as a copy and excluded.')
                 return
-            source_id = f'S{len(sources) + 1}'
+            source_id, rating = f'S{len(sources) + 1}', credibility.rate(final_url)
             sources[source_id] = Source(id=source_id, title=str(result.hit.get('title', 'Source'))[:250],
-                                        url=final_url, text=text, retrieved_at=now(), retrieval=retrieval)
+                                        url=final_url, text=text, retrieved_at=now(), retrieval=retrieval,
+                                        source_type=rating.label, source_tier=rating.tier)
             run.read_from[source_id] = result.direction
             if retrieval == 'search_copy':
                 warnings.append(f'{source_id} refused the app\'s page reader; its text is the search provider\'s '

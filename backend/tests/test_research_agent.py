@@ -86,7 +86,7 @@ def test_each_step_shows_the_agent_the_result_of_the_last_one():
     first, second, third = provider.states[0], provider.states[1], provider.states[2]
     assert first['searches'] == [] and set(first['tools']) == {'search_web', 'read_pages', 'finish'}
     assert second['searches'][0]['results'][0] == {'id': 'R1', 'title': 'Result 1.0', 'url': 'https://example.org/page-1-0',
-                                                   'snippet': 'A short snippet.', 'read': False}
+                                                   'source_type': 'Unrated website', 'snippet': 'A short snippet.', 'read': False}
     assert 'returned 1 new result' in second['last_step']
     assert third['pages_read'][0]['source_id'] == 'S1' and third['searches'][0]['results'][0]['read'] is True
     assert third['remaining'] == {'searches': MAX_SEARCHES - 1, 'pages': research_agent.MAX_PAGES - 1, 'steps': MAX_STEPS - 2}
