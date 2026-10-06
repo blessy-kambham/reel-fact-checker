@@ -4,8 +4,8 @@ import socket
 import pytest
 from schemas import VerdictDecision, EvidenceRelation, ExtractionCoverage, AtomicClaim, Analysis, EvidenceDraft, EvidenceSelection, Source, CitationJudgment, Extraction
 from services.pipeline import research_claim, run_pipeline, verify_citation
-from services.providers import ProviderFailure
-from services.fetcher import validate_url, PublicResolver
+from tools.providers import ProviderFailure
+from tools.fetcher import validate_url, PublicResolver
 
 PAGE = 'The fictional sensor measured 12 units during the test. The sample was limited to one room.'
 DRAFT = EvidenceSelection(source_id='S1', excerpt_id='S1:E1', statement='The sensor measured 12 units in the test.', stance='FOR')

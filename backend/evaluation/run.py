@@ -6,7 +6,7 @@ from pathlib import Path
 
 from schemas import VerdictDecision, EvidenceRelation, Analysis, AtomicClaim, CitationJudgment
 from services.pipeline import research_claim
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 CASE_PATH = Path(__file__).with_name('cases.json')
 

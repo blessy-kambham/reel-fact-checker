@@ -81,14 +81,15 @@ backend/
     orchestrator.py      chooses the next agent; shared state; withholding rules
     content_extractor.py claim_extractor.py research_agent.py
     analyst_agent.py     citation_verifier.py verdict_agent.py
-  services/
-    pipeline.py          public entry points (the implementation is in agents/)
-    article.py           article ingestion and verbatim claim checks
-    video.py, media.py   video entry point, ffmpeg validation and extraction
-    transcribe.py        local Whisper transcription
+  tools/                 what the agents work with
     providers.py         OpenAI and Tavily adapters
     fetcher.py           safe page fetching
     excerpts.py          numbered excerpts with character offsets
+    media.py             ffmpeg validation, audio and keyframe extraction
+    transcribe.py        local Whisper transcription
+  services/              application plumbing
+    pipeline.py          public entry points (the implementation is in agents/)
+    article.py, video.py article and video entry points, verbatim claim checks
     input_mapping.py     verbatim mapping of claims to the input
     budget.py            spending reservations and the daily ledger
     history.py           saved reports (SQLite)

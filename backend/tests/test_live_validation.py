@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import main
 from evaluation.live import Budget
 from evaluation.summarize import summarize
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 from services.demo import demo_report
 from schemas import Extraction
 

@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from pydantic import ValidationError
 from schemas import VerdictDecision, EvidenceRelation, Source, EvidenceSelection, CitationJudgment, Analysis, AtomicClaim
-from services.excerpts import source_excerpts
+from tools.excerpts import source_excerpts
 from services.pipeline import verify_selection, research_claim
 
 

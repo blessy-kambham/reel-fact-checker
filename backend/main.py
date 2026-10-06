@@ -20,12 +20,12 @@ from services.article import ArticleUnavailable, run_article_pipeline
 from services.demo import demo_report
 from services.history import History
 from services import access
-from services import media
-from services.media import MediaRejected, MediaToolMissing
-from services.transcribe import LocalWhisper, TranscriptionUnavailable
+from tools import media
+from tools.media import MediaRejected, MediaToolMissing
+from tools.transcribe import LocalWhisper, TranscriptionUnavailable
 from services.video import MAX_CAPTION_CHARS, run_video_pipeline
 from services.pipeline import run_pipeline
-from services.providers import Providers, ProviderFailure, missing_settings
+from tools.providers import Providers, ProviderFailure, missing_settings
 
 load_dotenv(Path(__file__).with_name('.env'))
 STARTED_AT = datetime.now(timezone.utc).isoformat(timespec='seconds')

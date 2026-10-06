@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 from schemas import VerdictAction, VerdictDecision
 from services.budget import BudgetExceeded
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
 

@@ -7,7 +7,7 @@ from agents.orchestrator import research_all, research_claim
 from agents.research_agent import MAX_SEARCHES, MAX_STEPS
 from schemas import ResearchAction
 from services.budget import BudgetExceeded
-from services.providers import ProviderFailure, Providers
+from tools.providers import ProviderFailure, Providers
 from tests.test_pipeline import CLAIM, PAGE, FakeProvider
 
 

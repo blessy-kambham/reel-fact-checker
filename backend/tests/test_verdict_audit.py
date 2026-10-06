@@ -4,7 +4,7 @@ import json
 import pytest
 from schemas import Analysis, AtomicClaim, EvidenceRelation, ExtractionCoverage, Extraction, VerdictDecision
 from services.pipeline import WITHHELD_MESSAGES, research_claim, run_pipeline
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 from tests.test_pipeline import CLAIM, DRAFT, FakeProvider, fake_fetch
 
 AGAINST = DRAFT.model_copy(update={'stance': 'AGAINST', 'statement': 'The sample was limited to one room.'})
@@ -250,7 +250,7 @@ def test_relation_prompt_treats_general_facts_as_background():
 
 
 def test_off_topic_pick_is_ignored_but_an_unavailable_relation_check_still_withholds():
-    from services.providers import ProviderFailure
+    from tools.providers import ProviderFailure
     off_topic = DRAFT.model_copy(update={'statement': 'The building has a blue roof.'})
     class Relation(Scripted):
         def __init__(self, outcome, **kwargs):

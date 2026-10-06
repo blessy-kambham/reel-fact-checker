@@ -24,9 +24,9 @@ from uuid import uuid4
 
 from schemas import Citation, ClaimResult, OrchestratorAction, Report
 from services.budget import BudgetExceeded
-from services.fetcher import fetch_text
+from tools.fetcher import fetch_text
 from services.input_mapping import map_input
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 from agents.analyst_agent import AnalystAgent
 from agents.citation_verifier import CitationVerifierAgent

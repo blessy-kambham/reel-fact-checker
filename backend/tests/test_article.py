@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import main
 from schemas import AtomicClaim, Extraction
 from services.article import ArticleUnavailable, run_article_pipeline
-from services.fetcher import validate_url
+from tools.fetcher import validate_url
 from tests.test_pipeline import FakeProvider, PAGE
 
 ARTICLE_URL = 'https://news.example.org/story'
@@ -194,7 +194,7 @@ def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check(monke
     import asyncio
     from types import SimpleNamespace
     from services.article import verbatim
-    from services.providers import Providers, repair_text
+    from tools.providers import Providers, repair_text
     page = 'NASA’s SLS rocket lifted off from Launch Pad 39B at the agency’s Kennedy Space Center — on “schedule”.'
     corrupted = 'NASA\x19s SLS rocket lifted off from Launch Pad 39B at the agency\x19s Kennedy Space Center \x14 on \x1cschedule\x1d.'
     assert not verbatim(corrupted, page)
@@ -219,7 +219,7 @@ def test_corrupted_model_punctuation_is_repaired_before_the_verbatim_check(monke
 
 def test_split_escape_punctuation_variant_is_repaired():
     # Second corruption form seen in live validation: U+0002 followed by the last three hex digits.
-    from services.providers import repair_text
+    from tools.providers import repair_text
     assert repair_text('Four astronauts \x02013 three from NASA') == 'Four astronauts – three from NASA'
     assert repair_text('NASA\x02019s rocket; we\x02019ll see') == 'NASA’s rocket; we’ll see'
     assert repair_text('Built in 2019, flight 013') == 'Built in 2019, flight 013'  # Real numbers are untouched.

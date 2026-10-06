@@ -11,7 +11,7 @@ from agents.content_extractor import ContentExtractorAgent, compose  # noqa: F40
 from agents.shared import now
 from schemas import Report
 from services.article import select_and_research
-from services.fetcher import fetch_text
+from tools.fetcher import fetch_text
 
 MAX_CAPTION_CHARS = 2200  # Instagram's caption limit.
 

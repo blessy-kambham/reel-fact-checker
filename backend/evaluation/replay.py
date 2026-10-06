@@ -10,7 +10,7 @@ os.environ['CORS_ORIGINS'] = 'http://127.0.0.1:5174'
 from fastapi import HTTPException
 import main
 from schemas import Report
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 class OfflineProvider:
     async def close(self):

@@ -10,11 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 import main
 from schemas import AtomicClaim, Extraction, ScreenText
-from services import media
+from tools import media
 from services.budget import Budget, IMAGE_TOKENS
-from services.media import MediaRejected, MediaToolMissing
-from services.providers import Providers
-from services.transcribe import Transcript
+from tools.media import MediaRejected, MediaToolMissing
+from tools.providers import Providers
+from tools.transcribe import Transcript
 from services.video import MAX_CAPTION_CHARS, compose, run_video_pipeline
 from tests.test_pipeline import FakeProvider, PAGE
 
@@ -89,7 +89,7 @@ def test_audio_and_keyframes_are_extracted(clip, tmp_path):
 
 
 def test_missing_tools_are_reported(monkeypatch, tmp_path):
-    monkeypatch.setattr('services.media.shutil.which', lambda name: None)
+    monkeypatch.setattr('tools.media.shutil.which', lambda name: None)
     path = tmp_path / 'x.mp4'
     path.write_bytes(b'x')
     with pytest.raises(MediaToolMissing):

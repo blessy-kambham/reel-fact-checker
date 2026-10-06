@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 
 from schemas import ResearchAction, Source
 from services.budget import BudgetExceeded
-from services.fetcher import fetch_text
-from services.providers import ProviderFailure
+from tools.fetcher import fetch_text
+from tools.providers import ProviderFailure
 
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
 from agents.shared import COPY_MARKER_MIN_WORDS, loose, now, page_key

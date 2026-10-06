@@ -9,7 +9,7 @@ from evaluation.live import AuditProvider, Budget, open_allowance
 from evaluation.summarize import summarize
 from services.pipeline import research_claim
 from services.budget import BudgetExceeded
-from services.providers import Providers, ProviderFailure
+from tools.providers import Providers, ProviderFailure
 from tests.test_pipeline import CLAIM, FakeProvider, fake_fetch
 
 SECRET = 'sk-test-must-never-be-copied'

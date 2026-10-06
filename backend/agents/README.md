@@ -26,7 +26,7 @@ statement ───────────────────┘
 | Citation Verifier | [`citation_verifier.py`](citation_verifier.py) | Confirms each quote is in the page and says what it is cited for. | `accept`, `reject`, or `read_full_page` when the passage around the quote is not enough. |
 | Verdict Agent | [`verdict_agent.py`](verdict_agent.py) | Gives the verdict from verified evidence only, citing evidence IDs. | `issue_verdict`, or `request_evidence` to say what is missing. |
 
-[`runtime.py`](runtime.py) is the tool loop all of them share. [`shared.py`](shared.py) holds helpers and messages. The report itself is formatted in the frontend ([`frontend/src/Report.jsx`](../../frontend/src/Report.jsx)), which also lists the steps the agents chose.
+[`runtime.py`](runtime.py) is the tool loop all of them share. [`shared.py`](shared.py) holds helpers and messages. What the tools actually do (the model, web search, page fetching, video and audio handling) lives in [`backend/tools/`](../tools). The report itself is formatted in the frontend ([`frontend/src/Report.jsx`](../../frontend/src/Report.jsx)), which also lists the steps the agents chose.
 
 ## The loop every agent runs
 
@@ -66,7 +66,7 @@ The agents are free to plan. These rules are code, and no agent can choose its w
 - **Every passage is read in full context at least once.** The citation verifier may decide from the text around a quote, but the analyst's relation check always reads the whole page, and a passage counts only if both agree.
 - **A revision faces the same check.** The claim extractor's second attempt is checked exactly like its first, and cannot pass by dropping a claim.
 - **Each agent sees only what it needs.** The orchestrator sees counts, never page text. The verdict agent never sees the rest of the submission, the analyst's proposed verdict or the research notes.
-- **Budgets.** Per claim: at most 5 searches, 8 pages, 2 research rounds (the second adds at most 3 pages) and 150 seconds; every loop has a step limit. Every model call is reserved against the daily spending cap before it runs (`services/providers.py`).
+- **Budgets.** Per claim: at most 5 searches, 8 pages, 2 research rounds (the second adds at most 3 pages) and 150 seconds; every loop has a step limit. Every model call is reserved against the daily spending cap before it runs (`tools/providers.py`).
 - **Fallback.** If an agent cannot plan a step, it does its standard single pass. `AGENT_MODE=fixed` turns planning off for all agents, and a comma-separated list (for example `AGENT_MODE=research,verdict`) turns it on for some.
 
 ## Following one claim through the code

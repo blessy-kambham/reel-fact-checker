@@ -8,7 +8,7 @@ from agents.orchestrator import research_all
 from agents.runtime import autonomous
 from agents.shared import loose, now, page_key, unresolved
 from schemas import AtomicClaim, Report
-from services.fetcher import fetch_text
+from tools.fetcher import fetch_text
 
 MAX_CONTEXT_CHARS = 600
 

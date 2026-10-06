@@ -24,7 +24,7 @@ from pathlib import Path
 from openai import AsyncOpenAI
 from evaluation import snapshot
 from services.budget import Budget
-from services.providers import Providers, ProviderFailure
+from tools.providers import Providers, ProviderFailure
 
 RESULTS = Path(__file__).with_name('results')
 ALLOWANCES = 'allowances'

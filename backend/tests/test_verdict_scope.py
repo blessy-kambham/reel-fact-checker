@@ -4,7 +4,7 @@ import json
 import pytest
 from schemas import Analysis, AtomicClaim, VerdictDecision
 from services.pipeline import research_claim
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 from tests.test_pipeline import FakeProvider, fake_fetch, DRAFT
 
 

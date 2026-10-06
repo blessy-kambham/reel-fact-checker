@@ -3,9 +3,9 @@ import asyncio
 import json
 import pytest
 from schemas import EvidenceRelation, CitationJudgment, EvidenceSelection, Source
-from services.excerpts import source_excerpts
+from tools.excerpts import source_excerpts
 from services.pipeline import verify_selection
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 
 def run(relation='CONTRADICTS', approved=True, fail=False):

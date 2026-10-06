@@ -15,7 +15,7 @@ import asyncio
 import json
 
 from services.budget import BudgetExceeded
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 AGENTS = ('orchestrator', 'content_extractor', 'claim_extractor', 'research', 'analyst', 'citation_verifier', 'verdict')
 

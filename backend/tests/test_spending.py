@@ -9,7 +9,7 @@ import main
 from schemas import Extraction
 from services.budget import Budget, BudgetExceeded, daily_budget
 from services.pipeline import run_pipeline
-from services.providers import Providers
+from tools.providers import Providers
 from tests.test_pipeline import CLAIM, FakeProvider, fake_fetch
 
 
@@ -49,7 +49,7 @@ def test_exhausted_budget_refuses_before_any_request(provider):
 def test_search_limit_refuses_before_any_request(provider, monkeypatch):
     def no_network(*args, **kwargs):
         raise AssertionError('no HTTP client may be created')
-    monkeypatch.setattr('services.providers.httpx.AsyncClient', no_network)
+    monkeypatch.setattr('tools.providers.httpx.AsyncClient', no_network)
     provider.spending = Budget(search_limit=0)
     with pytest.raises(BudgetExceeded):
         asyncio.run(provider.search('query'))

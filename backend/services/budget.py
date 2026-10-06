@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from services.providers import ProviderFailure
+from tools.providers import ProviderFailure
 
 # USD per token (input, output). Reservations are only meaningful for models listed here.
 PRICES = {'gpt-4.1-mini': (Decimal('0.0000004'), Decimal('0.0000016'))}
