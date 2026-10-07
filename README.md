@@ -234,6 +234,7 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 - The same model performs analysis and checking in separate calls, so correlated mistakes are possible.
 - Only HTML and plain-text pages are read. PDFs, paywalled pages and pages that need JavaScript are skipped.
 - A video link is fetched with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and this is off unless `ALLOW_VIDEO_LINKS=true`. Instagram, TikTok and YouTube do not offer an official way to download other people's videos and their terms may not allow it, so the setting is the operator's decision and is meant for videos you have the right to download. The app never signs in to those sites, so private posts cannot be fetched, and sites often refuse downloads from cloud servers: when that happens the report says so and asks for the file instead. Two real downloads have been tried, both from a home connection and both successful: a YouTube video and a public Instagram Reel, without signing in. TikTok links, and any link from the cloud deployment, are untested.
+- From a real Reel the claim step can pick a statement nobody could check, such as a speaker's account of their own posts. It ends without a verdict, after pages have been read for nothing. An instruction meant to prevent this made no difference on the one Reel it was tried on.
 - Whisper can mishear fast speech or speech over loud music, and on-screen text is read from four keyframes (twelve when the content extractor asks for a closer look), so brief captions can be missed.
 - One server process handles one report at a time, with in-memory rate limits. That suits a demo, not public traffic.
 
@@ -244,4 +245,4 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 - Extend the credibility lists, so that well-known medical and scientific organisations are not "unrated".
 - Rate sources from more than their address (author, date, citations), and judge whether two sites are really independent rather than only different.
 - Review accepted citations by hand on a larger reference set to measure precision.
-- Test real Reels with background music, fast speech and fast-changing text.
+- Test real Reels that state facts, with background music, fast speech and fast-changing text. The one real Reel run so far was an advert.
