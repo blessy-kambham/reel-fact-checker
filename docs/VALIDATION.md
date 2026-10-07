@@ -107,7 +107,19 @@ The link feature is covered offline by tests that never start a real download, s
 | A 19-second public YouTube video ("Me at the zoo") | Downloaded: a 0.5 MB MP4, with its title and its 262-character description as the caption |
 | A public Instagram Reel, from its share link | Downloaded without signing in: a 0.3 MB MP4, with the post's 158-character caption. The tracking code in the share link was dropped before the request |
 
-That is two links on two sites. A TikTok link has not been tried, nor has any link from the cloud deployment, where these sites more often refuse automated downloads. One public Reel downloading today does not mean every Reel will: Instagram asks for a sign-in for some posts and at some times, and the app then asks for the file instead. The full path from a link to a report has not been run live either; the downloaded file goes through the same pipeline as an upload, which has been.
+That is two links on two sites. A TikTok link has not been tried. One public Reel downloading today does not mean every Reel will: Instagram asks for a sign-in for some posts and at some times, and the app then asks for the file instead.
+
+The same Reel was then pasted into the cloud deployment, with `ALLOW_VIDEO_LINKS` turned on, to run the whole path from a link to a report.
+
+| Step | Result |
+| --- | --- |
+| Download from the cloud server | Worked, without signing in. The report shows the link with its tracking code removed |
+| Reading the video | 12 seconds; speech transcribed, on-screen text read from four frames, and the post's own caption used |
+| Claims | Two. The Reel advertises an app feature, so neither is a general fact |
+| "I went through all ~2,700 of your saved posts and moved 140 interior-design ones into it" | No verdict: nothing found addresses it. That is the right outcome, but it is one person's account of their own posts and should not have been picked as a claim to research; five pages were read for nothing |
+| "Connect your Instagram and @muse and it can sort them by theme…" | PARTIALLY TRUE, low confidence, from three passages on two unrated sites. Two of the three passages describe Instagram's own collections, not the feature the Reel is about, and were accepted as support anyway |
+
+So the link feature works end to end from the deployment for this one Reel. It also shows two weaknesses that clear test videos did not: the claim step picks up personal and promotional statements from a real Reel, and the citation check accepted loosely related passages as support. Neither has been changed.
 
 ### Videos
 
@@ -130,7 +142,7 @@ One article, a NASA launch press release, was run live. Two of its three claims 
 - **Accuracy at scale.** These sessions and the 30-claim scorecard show the pipeline working on specific, mostly well-known cases.
 - **Citation precision.** Accepted citations passed automated checks. Nobody reviewed them by hand.
 - **Source quality.** Some verdicts rested on a single page or on weak secondary sources, and one run cited a social media post alongside reference sites. Since then, social media pages are refused as evidence and each verdict reports the strength of its sources. That rating comes from short lists of known sites and has been checked live on one claim only.
-- **Real Reels.** The test videos were generated with clear speech. Background music, fast speech and brief captions are untested.
+- **Real Reels.** The test videos were generated with clear speech. One real Reel has been run, from its link, and it was an advert with no checkable general fact in it. Background music, fast speech and Reels that make factual claims are untested.
 
 ## Reproducing a session
 
