@@ -98,6 +98,16 @@ After each verdict began to carry an explanation and a for/against balance, I ra
 
 All three explanations passed the citation check, so none was withheld, and I found no sentence that went beyond its evidence apart from that adjective. Three claims is a look, not a measurement. The check confirms that each sentence points at verified evidence the verdict cites; reading them is still the only way to tell whether a sentence is a fair account of it. The three claims cost 11 cents.
 
+### A video from a link
+
+The link feature is covered offline by tests that never start a real download, so on 7 October I tried one from a laptop on a home connection, using `python -m tools.video_link`, which downloads, reports and deletes without any model or search call.
+
+| Link | Result |
+| --- | --- |
+| A 19-second public YouTube video ("Me at the zoo") | Downloaded: a 0.5 MB MP4, with its title and its 262-character description as the caption |
+
+That is one link on one site. Instagram and TikTok links have not been tried, nor has any link from the cloud deployment, where these sites more often refuse automated downloads. The full path from a link to a report has not been run live either; the downloaded file goes through the same pipeline as an upload, which has been.
+
 ### Videos
 
 Three generated Reel-format videos with known answers, run on a laptop with ffmpeg and the Whisper `small` model.
