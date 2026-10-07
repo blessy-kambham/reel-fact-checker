@@ -2,7 +2,8 @@
 
 Classifies what kind of content was submitted (factual, opinion, satire, fictional, unrelated) and
 extracts the claims in it, copied word for word: up to five from a typed statement, up to three central
-ones from an article or a video. It never judges whether a claim is true.
+ones from an article or a video, leaving out what a speaker says about their own experience. It never
+judges whether a claim is true.
 
 The agent checks its own work. The application tests every extraction against the submission (claims
 must be copied word for word; for statements a separate coverage audit must pass). When that check
@@ -36,6 +37,11 @@ DOCUMENT_INSTRUCTIONS = (
     'Classify its intent. Select at most three central factual claims it '
     'itself asserts: the claims a reader most needs checked, capable of being checked, not known to be true. '
     'Include false, misleading and uncertain claims exactly as asserted; never skip one because you think it is wrong. '
+    'A claim to select is about the world at large, so that a published source could confirm or contradict it. '
+    'Do not select what a speaker reports about their own experience, belongings or private data, or what a product '
+    'did for one person: no published source can check those. A general statement of what a product, service or thing '
+    'is or does may be selected. When that leaves fewer than three claims, return fewer, or none, and say in note what '
+    'was left out and why. '
     'Copy each claim VERBATIM as a contiguous substring of the text; do not paraphrase, merge or expand pronouns. '
     'Prefer claims that stand alone. Set context to the verbatim surrounding sentence or two (at most 600 characters) '
     'that a reader needs to understand the claim. Ignore navigation, advertising, comments and quotes the text rejects. '

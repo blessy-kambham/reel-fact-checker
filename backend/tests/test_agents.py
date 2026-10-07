@@ -1055,3 +1055,10 @@ def test_every_agent_can_be_switched_on_by_name():
     for agent in AGENTS:
         assert autonomous(Team(agent), agent) and not autonomous(Team('fixed'), agent) and autonomous(Team('autonomous'), agent)
     assert not autonomous(FakeProvider(), 'research')   # A provider that says nothing uses the standard pass.
+
+
+def test_documents_are_told_to_leave_out_personal_accounts_and_typed_statements_are_not():
+    # A real Reel had "I went through all ~2,700 of your saved posts" researched as a claim. Typed statements keep
+    # every assertion, because the coverage audit requires it.
+    assert 'own experience' in claim_extractor.DOCUMENT_INSTRUCTIONS
+    assert 'own experience' not in claim_extractor.STATEMENT_INSTRUCTIONS

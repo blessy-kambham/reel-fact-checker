@@ -119,7 +119,7 @@ The same Reel was then pasted into the cloud deployment, with `ALLOW_VIDEO_LINKS
 | "I went through all ~2,700 of your saved posts and moved 140 interior-design ones into it" | No verdict: nothing found addresses it. That is the right outcome, but it is one person's account of their own posts and should not have been picked as a claim to research; five pages were read for nothing |
 | "Connect your Instagram and @muse and it can sort them by theme…" | PARTIALLY TRUE, low confidence, from three passages on two unrated sites. Two of the three passages describe Instagram's own collections, not the feature the Reel is about, and were accepted as support anyway |
 
-So the link feature works end to end from the deployment for this one Reel. It also shows two weaknesses that clear test videos did not: the claim step picks up personal and promotional statements from a real Reel, and the citation check accepted loosely related passages as support. Neither has been changed.
+So the link feature works end to end from the deployment for this one Reel. It also shows two weaknesses that clear test videos did not: the claim step picks up personal and promotional statements from a real Reel, and the citation check accepted loosely related passages as support. The claim step has since been told to leave out what a speaker says about their own experience when picking claims from an article or a video; that has not been re-run on this Reel yet. The citation check is unchanged.
 
 ### Videos
 

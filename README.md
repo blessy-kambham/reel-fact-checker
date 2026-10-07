@@ -185,7 +185,7 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 678 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 679 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
 npx playwright install chromium && npm run test:e2e   # 21 browser tests, mocked backend
