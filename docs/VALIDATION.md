@@ -100,13 +100,14 @@ All three explanations passed the citation check, so none was withheld, and I fo
 
 ### A video from a link
 
-The link feature is covered offline by tests that never start a real download, so on 7 October I tried one from a laptop on a home connection, using `python -m tools.video_link`, which downloads, reports and deletes without any model or search call.
+The link feature is covered offline by tests that never start a real download, so on 7 October I tried two from a laptop on a home connection, using `python -m tools.video_link`, which downloads, reports and deletes without any model or search call.
 
 | Link | Result |
 | --- | --- |
 | A 19-second public YouTube video ("Me at the zoo") | Downloaded: a 0.5 MB MP4, with its title and its 262-character description as the caption |
+| A public Instagram Reel, from its share link | Downloaded without signing in: a 0.3 MB MP4, with the post's 158-character caption. The tracking code in the share link was dropped before the request |
 
-That is one link on one site. Instagram and TikTok links have not been tried, nor has any link from the cloud deployment, where these sites more often refuse automated downloads. The full path from a link to a report has not been run live either; the downloaded file goes through the same pipeline as an upload, which has been.
+That is two links on two sites. A TikTok link has not been tried, nor has any link from the cloud deployment, where these sites more often refuse automated downloads. One public Reel downloading today does not mean every Reel will: Instagram asks for a sign-in for some posts and at some times, and the app then asks for the file instead. The full path from a link to a report has not been run live either; the downloaded file goes through the same pipeline as an upload, which has been.
 
 ### Videos
 
