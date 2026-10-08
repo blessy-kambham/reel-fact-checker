@@ -1,10 +1,12 @@
 """Local fact-checking API. Live calls are explicitly opt-in."""
 import asyncio
+import hashlib
 import os
 import sqlite3
 import tempfile
 from uuid import UUID
 from pathlib import Path
+from urllib.parse import urldefrag, urlsplit, urlunsplit
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
@@ -18,6 +20,7 @@ from decimal import Decimal, InvalidOperation
 from services.budget import PRICES, BudgetExceeded, daily_budget
 from services.article import ArticleUnavailable, run_article_pipeline
 from services.demo import demo_report
+from services.formatter import short_summary
 from services.history import History
 from services import access
 from tools import media, video_link
@@ -40,6 +43,7 @@ def setting_states():
 DATA_DIR = Path(os.getenv('DATA_DIR') or Path(__file__).with_name('data'))
 DEFAULT_DAILY_USD, DEFAULT_DAILY_SEARCHES = '0.50', 40
 DEFAULT_REUSE_DAYS = 7   # the design brief's period for reusing the verdict of a repeated claim
+DEFAULT_LINK_CACHE_HOURS = 24   # the brief's period for answering the same link from the saved report
 
 
 def spending_limits():
@@ -140,6 +144,40 @@ def recall_claim(key):
         return None
 
 
+def link_cache_hours():
+    """How long a link's report is shown again when the same link is submitted. 0 turns this off."""
+    try:
+        return max(0, int(os.getenv('LINK_CACHE_HOURS', '').strip() or DEFAULT_LINK_CACHE_HOURS))
+    except ValueError:
+        return DEFAULT_LINK_CACHE_HOURS
+
+
+def link_key(kind, url, caption=''):
+    """What identifies one link's report: the kind of input, the link, and for a video any caption typed with it,
+    since a typed caption changes what is checked."""
+    return hashlib.sha256('\n'.join((kind, url, caption.strip())).encode('utf-8')).hexdigest()
+
+
+def article_link(url):
+    """An article link as it identifies a page: without its #fragment or a trailing slash, and with only the scheme
+    and host lowercased. Paths and queries keep their case, which can tell two different pages apart."""
+    parts = urlsplit(urldefrag(url.strip())[0])
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip('/'), parts.query, ''))
+
+
+def saved_link_report(key):
+    """The report the same link received within the cache period, marked as shown again, or None. It costs nothing,
+    so it is answered before the spending, rate and one-at-a-time limits. Never raises."""
+    hours = link_cache_hours()
+    if not hours:
+        return None
+    try:
+        report = history().find_link(key, (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat())
+    except (sqlite3.Error, ValueError):
+        return None
+    return report.model_copy(update={'shown_again': True}) if report else None
+
+
 def todays_budget():
     usd, searches = spending_limits()
     return daily_budget(DATA_DIR, usd, searches, os.environ['OPENAI_MODEL'])
@@ -221,7 +259,9 @@ async def fact_check(body: ClaimRequest, request: Request):
 
 @app.post('/fact-check-article', response_model=Report, dependencies=[Depends(require_access)])
 async def fact_check_article(body: ArticleRequest, request: Request):
-    return await run_live(request, lambda provider: run_article_pipeline(body.url, provider))
+    key = link_key('article', article_link(body.url))
+    return saved_link_report(key) or await run_live(request, lambda provider: run_article_pipeline(body.url, provider),
+                                                    source_key=key)
 
 
 @app.middleware('http')
@@ -268,13 +308,15 @@ async def fact_check_video_link(body: VideoLinkRequest, request: Request):
         url = video_link.check_link(body.url)   # refused here, before any limit is spent or any request is made
     except video_link.LinkRejected as exc:
         raise HTTPException(422, str(exc))
+    key = link_key('video', url, body.caption)
     # The download happens inside the guarded run: one at a time, rate-limited, and never without live research on.
-    return await run_live(request, lambda provider: run_video_link_pipeline(url, body.caption, provider, transcriber()), timeout=600)
+    return saved_link_report(key) or await run_live(
+        request, lambda provider: run_video_link_pipeline(url, body.caption, provider, transcriber()), timeout=600, source_key=key)
 
 
-async def run_live(request, make_report, timeout=330):
+async def run_live(request, make_report, timeout=330, source_key=None):
     """Shared guards for every live report: configuration, daily spending, per-client limit, one run at a time,
-    timeout, history."""
+    timeout, history. `source_key` names the link a report is made from, so it can be shown again."""
     status = config(request)
     if not status['live_ready']:
         raise HTTPException(503, 'Live research is off. Try the free demo. Configure backend/.env when you are ready for provider setup.'
@@ -304,8 +346,9 @@ async def run_live(request, make_report, timeout=330):
             raise HTTPException(502, str(exc))
         finally:
             await provider.close()
+    report = report.model_copy(update={'summary_text': short_summary(report)})
     try:
-        history().save(report)
+        history().save(report, source_key)
     except sqlite3.Error:
         report = report.model_copy(update={'limitations': report.limitations + ['This report could not be saved to history.']})
     return report

@@ -68,6 +68,27 @@ function App() {
 
   const locked = Boolean(config?.auth?.required && !config?.auth?.signed_in);
 
+  // A link to a saved report (?report=<id>, from a short summary) opens it once the page may read saved reports.
+  const [linkedReport, setLinkedReport] = useState(() => {
+    const id = new URLSearchParams(window.location.search).get('report');
+    return id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
+  });
+  useEffect(() => {
+    if (!linkedReport || !config || locked) return;
+    const id = linkedReport;
+    setLinkedReport(null);
+    (async () => {
+      try {
+        const response = await fetch(`${apiBase}/history/${id}`, { signal: AbortSignal.timeout(10000) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'That report could not be opened.');
+        setReport(data);
+      } catch (err) {
+        setError(err instanceof TypeError || err.name === 'TimeoutError' ? 'The saved report could not be loaded. Try again in a moment.' : err.message);
+      }
+    })();
+  }, [linkedReport, config, locked]);
+
   async function run(demo = false) {
     if (loading) return;
     setLoading(true); setReport(null); setError('');

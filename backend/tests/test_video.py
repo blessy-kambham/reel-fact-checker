@@ -305,3 +305,20 @@ def test_media_errors_become_clear_messages(client, monkeypatch):
     monkeypatch.setattr(main, 'run_video_pipeline', rejected)
     response = client.post('/fact-check-video', files={'file': ('clip.mp4', b'x', 'video/mp4')})
     assert response.status_code == 422 and response.json()['detail'] == 'Videos must be at most 3 minutes long.'
+
+
+@needs_ffmpeg
+def test_speech_recognition_that_was_unsure_is_flagged(clip):
+    from services.video import POOR_AUDIO_NOTE
+
+    class Recognised(FakeTranscriber):
+        def __init__(self, confidence):
+            super().__init__()
+            self.confidence = confidence
+        async def transcribe(self, audio):
+            return Transcript(text=self.text, language='en', confidence=self.confidence)
+    unsure = run(clip, VideoProvider(), Recognised(0.42))
+    assert unsure.media.poor_audio and unsure.media.transcript_confidence == 0.42 and POOR_AUDIO_NOTE in unsure.limitations
+    for confident in (Recognised(0.75), FakeTranscriber()):   # sure enough, or no measure at all
+        report = run(clip, VideoProvider(), confident)
+        assert not report.media.poor_audio and POOR_AUDIO_NOTE not in report.limitations

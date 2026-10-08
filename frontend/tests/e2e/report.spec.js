@@ -295,3 +295,102 @@ test('reports without source ratings show no strength line', async ({ page }) =>
   await expect(page.getByText(/Source strength/)).toHaveCount(0);
   await expect(page.getByText(/Source type:/)).toHaveCount(0);
 });
+
+test('a live report carries a short summary that copies with a link to the saved report', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await mockBackend(page, { factCheck: (route, json) => json(200, report({
+    summary_text: 'TRUE: "The fictional tower is 300 metres tall." Checked against 1 site, low confidence.' })) });
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Short summary')).toBeVisible();
+  await page.getByRole('button', { name: 'Copy' }).click();
+  await expect(page.getByText('Copied.')).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toBe('TRUE: "The fictional tower is 300 metres tall." Checked against 1 site, low confidence. '
+    + 'Full report: http://127.0.0.1:5199/?report=11111111-1111-4111-8111-111111111111');
+});
+
+test('a report without a summary, and the demo, show no summary box', async ({ page }) => {
+  await mockBackend(page);
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Evidence used for the verdict')).toBeVisible();
+  await expect(page.getByText('Short summary')).toHaveCount(0);
+});
+
+test('a link with ?report= opens that saved report', async ({ page }) => {
+  const saved = report({ submitted_text: 'Saved', summary_text: 'TRUE: "Saved claim."' }, { claim: 'Saved claim from yesterday.' });
+  const calls = await mockBackend(page, { saved: { [saved.id]: saved } });
+  await page.goto(`/?report=${saved.id}`);
+  await expect(page.getByRole('heading', { name: 'Saved claim from yesterday.' })).toBeVisible();
+  expect(calls.some(c => c.path === `/history/${saved.id}`)).toBe(true);
+});
+
+test('a malformed or missing ?report= does not break the page', async ({ page }) => {
+  const calls = await mockBackend(page);
+  await page.goto('/?report=../../config');
+  await expect(page.getByRole('button', { name: /Research this claim/ })).toBeVisible();
+  expect(calls.some(c => c.path.startsWith('/history/'))).toBe(false);
+  await page.goto('/?report=33333333-3333-4333-8333-333333333333');
+  await expect(page.getByRole('alert')).toContainText('Report not found.');
+});
+
+test('the verdict card downloads as a PNG image', async ({ page }) => {
+  await mockBackend(page);
+  await page.goto('/');
+  await page.getByLabel('Your statement').fill('Claim');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download card' }).click()]);
+  expect(download.suggestedFilename()).toBe('verdict-11111111-1111-4111-8111-111111111111.png');
+  const fs = await import('node:fs');
+  const bytes = fs.readFileSync(await download.path());
+  expect([...bytes.subarray(1, 4)].map(b => String.fromCharCode(b)).join('')).toBe('PNG');
+  expect(bytes.length).toBeGreaterThan(10000);
+});
+
+test('the demo has no verdict card', async ({ page }) => {
+  await mockBackend(page, { config: offlineConfig });
+  await page.goto('/');
+  await page.getByRole('button', { name: /Explore the free demo/ }).click();
+  await expect(page.getByText('FICTIONAL DEMO REPORT')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download card' })).toHaveCount(0);
+});
+
+test('a repeated link and hard-to-hear speech are both pointed out', async ({ page }) => {
+  await mockBackend(page, { videoLink: (route, json) => json(200, report({
+    shown_again: true, input_type: 'video', source_url: 'https://www.instagram.com/reel/abc/',
+    media: { duration_seconds: 12, had_audio: true, transcript_language: 'en', frames_read: 4, transcript_chars: 80,
+             screen_text_chars: 10, caption_chars: 0, transcript_confidence: 0.41, poor_audio: true } })) });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Video' }).click();
+  await page.getByRole('button', { name: 'Paste a link' }).click();
+  await page.getByLabel('Video link').fill('https://www.instagram.com/reel/abc/');
+  await page.getByRole('button', { name: /Research this claim/ }).click();
+  await expect(page.getByText('Checked before.')).toBeVisible();
+  await expect(page.getByText(/That report is shown again; no new research was done/)).toBeVisible();
+  await expect(page.getByText('Hard to hear.')).toBeVisible();
+});
+
+test('the card never cuts a claim without showing it was cut', async ({ page }) => {
+  await mockBackend(page);
+  await page.goto('/');
+  const result = await page.evaluate(async () => {
+    const { wrap, cardContent } = await import('/src/card.js');
+    const context = document.createElement('canvas').getContext('2d');
+    context.font = '44px serif';
+    const spaceless = '据说长城是在太空中用肉眼唯一能看到的人造建筑但其实这种说法并不正确而且宇航员也证实了这一点';
+    const fits = lines => lines.every(line => context.measureText(line).width <= 400);
+    const whole = wrap(context, spaceless, 400, 20), cut = wrap(context, spaceless, 400, 2);
+    const link = wrap(context, `See https://example.org/${'a'.repeat(200)} now`, 400, 20);
+    return {
+      wholeJoins: whole.join('') === spaceless, wholeFits: fits(whole), cutEnds: cut.at(-1).endsWith('…'),
+      cutFits: fits(cut), cutLines: cut.length, linkFits: fits(link), linkEnds: link.at(-1),
+      shortUntouched: wrap(context, 'A short claim.', 400, 4), empty: wrap(context, '', 400, 4),
+      noOverall: cardContent({ claims: [{ verdict: 'TRUE' }, { verdict: 'FALSE' }] }).verdict,
+    };
+  });
+  expect(result).toEqual({ wholeJoins: true, wholeFits: true, cutEnds: true, cutFits: true, cutLines: 2, linkFits: true,
+    linkEnds: 'now', shortUntouched: ['A short claim.'], empty: [], noOverall: null });
+});

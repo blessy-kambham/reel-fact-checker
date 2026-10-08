@@ -19,7 +19,7 @@ from schemas import ContentAction, MediaSummary, ScreenText
 from tools import media
 from services.budget import BudgetExceeded
 from tools.providers import ProviderFailure
-from tools.transcribe import Transcript
+from tools.transcribe import LOW_CONFIDENCE, Transcript
 
 from agents.runtime import Done, PlanningUnavailable, autonomous, run_tools
 from agents.shared import loose
@@ -115,9 +115,11 @@ class ContentExtractorAgent:
                                     {'read_more_frames': read_more_frames, 'finish': finish}, max_steps=1)
                 except PlanningUnavailable:
                     pass  # The first pass stands.
+        confidence = getattr(transcript, 'confidence', None)
         summary = MediaSummary(duration_seconds=round(info.duration, 2), had_audio=info.has_audio,
                                transcript_language=transcript.language, frames_read=frames_read,
-                               transcript_chars=len(transcript.text), screen_text_chars=len(screen), caption_chars=len(caption))
+                               transcript_chars=len(transcript.text), screen_text_chars=len(screen), caption_chars=len(caption),
+                               transcript_confidence=confidence, poor_audio=confidence is not None and confidence < LOW_CONFIDENCE)
         return ExtractedContent(text=compose(transcript.text, screen, caption), summary=summary, frames_read=frames_read,
                                 steps=[f'{self.name}: {step}' for step in steps])
 

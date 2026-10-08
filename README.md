@@ -7,12 +7,13 @@ I built this as a portfolio project to explore a question I care about: how do y
 ## What it does
 
 - **Three kinds of input.** A typed statement, a public article URL, or a video up to 3 minutes long: an uploaded file (MP4, MOV or WebM) or, where the deployment allows it, a link to a public video on Instagram, TikTok or YouTube.
-- **Video understanding.** Speech is transcribed locally with Whisper, on-screen text is read from keyframes, and an optional caption is included, so a silent Reel with text overlays works too.
+- **Video understanding.** Speech is transcribed locally with Whisper, on-screen text is read from keyframes, and an optional caption is included, so a silent Reel with text overlays works too. When Whisper was unsure of the speech, the report says it was hard to hear.
 - **Claim-by-claim reports.** Up to five claims from a typed submission, or the three central claims of an article or video, each with a verdict (`TRUE`, `FALSE`, `PARTIALLY TRUE`, `MISLEADING`, `OUTDATED` or `UNVERIFIABLE`), the passages the verdict rests on, and links to their sources.
 - **Source credibility.** Every page is rated by where it comes from, in the design brief's categories and weights (government data 0.95, peer-reviewed 0.90, fact-checkers 0.88, down to social media 0.10). Social media and blogs are never used as evidence, and each verdict shows how strong its sources are and how many different sites it rests on.
 - **A short explanation and an evidence bar.** Each verdict comes with two to four plain sentences saying why, every one tied to the evidence it rests on, and a bar showing how much verified evidence is on each side.
 - **Confidence and an overall verdict.** Each verdict carries a confidence level (high, medium or low) with the reasons for it, and a submission with several claims gets one overall verdict. Both are counting rules, not a model's opinion.
-- **Repeated claims are not researched twice.** A claim already checked in the last seven days is shown again from the saved result, marked as reused.
+- **Repeated claims are not researched twice.** A claim already checked in the last seven days is shown again from the saved result, marked as reused, and the same article or video link pasted again within 24 hours gets its saved report back at no cost.
+- **A short summary and a verdict card.** Each report has a summary of at most 280 characters with a link that reopens the saved report, ready to paste into a message, and a "Download card" button that draws the verdict as a PNG image for sharing.
 - **Verdicts can be withheld.** If sources cannot be read, a check could not be run, or the evidence conflicts, the report gives the reason instead of a verdict.
 - **Saved reports.** Live reports are stored in SQLite and can be reopened, printed, saved as PDF or downloaded as JSON.
 - **A free demo mode.** A fictional example report that needs no API keys and makes no external calls.
@@ -64,6 +65,8 @@ These are the choices that shaped the project, most of them made after a live te
 - **Reuse goes back to the original.** A repeated claim is recognised by its words and context, not by meaning, and only a real verdict issued on complete research is reused. A reused result is never itself reused, so nothing outlives its seven days, and deleting the original report makes the claim be researched again.
 - **Copies are not corroboration.** An article's own page is never accepted as evidence for its claims, and pages that repeat the checked text word for word are treated as reposts.
 - **A link is downloaded by a boxed-in process.** A video link must be a plain https link to one of three sites, checked before any request is made. The downloader then runs as a separate process with a fixed argument list, only the single-video extractors for those sites, a time limit and a file-size limit, in an empty folder, with none of the app's keys in its environment, and it is stopped together with anything it started when the request ends.
+- **The short summary is written by code, not a model.** The brief gives the short message format to a "Response Formatter" agent. Here it is a few lines of code ([`backend/services/formatter.py`](backend/services/formatter.py)) that put the verdict, the claim, the number of sites and the confidence into a fixed sentence, because a model rewording a checked verdict could only add mistakes.
+- **A link's report is shown again, but only a finished one.** The same article or video link within 24 hours gets the saved report back without new research or cost. A report in which any claim was cut short (a failed search, a time limit, the spending cap) is never reused, and a video with a caption typed alongside it counts as a different submission.
 - **Blocked pages fall back transparently.** When a site refuses the app's fetcher, the search provider's extracted text for that page is used instead, and the report labels that evidence.
 - **Spending is capped before it happens.** Every model and search call reserves its worst-case cost against a daily ledger before it runs and is reconciled afterwards. When the cap is reached, research stops for the day.
 - **Fetching is defensive.** Only public HTTPS pages are fetched; redirects and DNS results are checked against private and reserved addresses, and responses are capped at 1 MB.
@@ -153,6 +156,7 @@ Live research needs an OpenAI API key and a Tavily key, and it costs money (a ch
 | `REUSE_DAYS` | Days a checked claim's result is shown again instead of researched again; default 7, `0` turns reuse off |
 | `WHISPER_MODEL` | Whisper size for video; default `small` |
 | `ALLOW_VIDEO_LINKS` | `true` lets a video be given as an Instagram, TikTok or YouTube link; default off (see Limitations) |
+| `LINK_CACHE_HOURS` | Hours the same article or video link gets its saved report back instead of new research; default 24, `0` turns it off |
 
 Never commit `.env` files or keys.
 
@@ -185,10 +189,10 @@ Interactive documentation is available at `/docs` when the backend is running.
 ## Testing
 
 ```sh
-cd backend && .venv/bin/python -m pytest -q        # 679 tests, no network or keys
+cd backend && .venv/bin/python -m pytest -q        # 704 tests, no network or keys
 .venv/bin/python -m evaluation.run                 # 13 policy regression cases
 cd ../frontend && npm run build
-npx playwright install chromium && npm run test:e2e   # 21 browser tests, mocked backend
+npx playwright install chromium && npm run test:e2e   # 29 browser tests, mocked backend
 ```
 
 The backend tests use scripted providers, so they run offline and cost nothing. They cover input validation, claim mapping, citation checks, verdict gating, spending limits, history, access control, article and video ingestion, the safe fetcher, source ratings, and each agent's choices together with the limits on them. The policy cases pin down how the pipeline must behave in specific situations, such as invented source IDs, misattributed quotes, search outages and conflicting evidence. GitHub Actions runs the backend tests, the policy cases and the frontend build on every push.
@@ -233,9 +237,10 @@ One Docker image serves the website and the API on a single port. [docs/DEPLOY.m
 - A repeated claim is recognised only when its wording and context match. The same claim in different words is researched again.
 - The same model performs analysis and checking in separate calls, so correlated mistakes are possible.
 - Only HTML and plain-text pages are read. PDFs, paywalled pages and pages that need JavaScript are skipped.
-- A video link is fetched with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and this is off unless `ALLOW_VIDEO_LINKS=true`. Instagram, TikTok and YouTube do not offer an official way to download other people's videos and their terms may not allow it, so the setting is the operator's decision and is meant for videos you have the right to download. The app never signs in to those sites, so private posts cannot be fetched, and sites often refuse downloads from cloud servers: when that happens the report says so and asks for the file instead. Two real downloads have been tried, both from a home connection and both successful: a YouTube video and a public Instagram Reel, without signing in. TikTok links, and any link from the cloud deployment, are untested.
+- A video link is fetched with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and this is off unless `ALLOW_VIDEO_LINKS=true`. Instagram, TikTok and YouTube do not offer an official way to download other people's videos and their terms may not allow it, so the setting is the operator's decision and is meant for videos you have the right to download. The app never signs in to those sites, so private posts cannot be fetched, and sites often refuse downloads from cloud servers: when that happens the report says so and asks for the file instead. Two real downloads have been tried from a home connection, a YouTube video and a public Instagram Reel, and the same Reel has been checked end to end from the cloud deployment, all without signing in. TikTok links are untested.
 - From a real Reel the claim step can pick a statement nobody could check, such as a speaker's account of their own posts. It ends without a verdict, after pages have been read for nothing. An instruction meant to prevent this made no difference on the one Reel it was tried on.
-- Whisper can mishear fast speech or speech over loud music, and on-screen text is read from four keyframes (twelve when the content extractor asks for a closer look), so brief captions can be missed.
+- Whisper can mishear fast speech or speech over loud music, and on-screen text is read from four keyframes (twelve when the content extractor asks for a closer look), so brief captions can be missed. The "hard to hear" warning comes from Whisper's own word probabilities, averaged and compared with the brief's 0.6 threshold; it is a rough signal that has not been checked against real Reels, so a clear-sounding but wrong transcript can still pass without it.
+- The link in a short summary opens the saved report only for someone who can sign in to the site.
 - One server process handles one report at a time, with in-memory rate limits. That suits a demo, not public traffic.
 
 ## What I would do next

@@ -247,6 +247,11 @@ class Report(StrictModel):
     # One verdict for a submission with two or more claims, built from the claims' verdicts (services/summary.py).
     overall_verdict: Verdict | None = None
     overall_summary: str | None = None
+    # The Response Formatter's short version of the report (services/formatter.py), at most 280 characters,
+    # for pasting into a message with a link to the full report.
+    summary_text: str | None = None
+    # Set on an answer that is a saved report shown again because the same link was checked recently.
+    shown_again: bool = False
 
 class MediaSummary(StrictModel):
     duration_seconds: float
@@ -256,6 +261,9 @@ class MediaSummary(StrictModel):
     transcript_chars: int
     screen_text_chars: int
     caption_chars: int
+    # A rough measure of how sure speech recognition was (0 to 1), and whether that was low enough to warn about.
+    transcript_confidence: float | None = None
+    poor_audio: bool = False
 
 class ScreenText(StrictModel):
     text: str = Field(max_length=4000, description='All text visible in the frames, copied exactly in reading order, '

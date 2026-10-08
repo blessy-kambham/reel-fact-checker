@@ -92,7 +92,7 @@ def test_demo_reports_are_not_saved(client):
 def test_history_save_failure_still_returns_the_report(client, monkeypatch):
     async def pipeline(text, provider):
         return live_report(text)
-    def broken(self, report):
+    def broken(self, report, source_key=None):
         raise sqlite3.OperationalError('disk full')
     monkeypatch.setattr(main, 'run_pipeline', pipeline)
     monkeypatch.setattr(History, 'save', broken)

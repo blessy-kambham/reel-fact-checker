@@ -48,11 +48,15 @@ async def run_video_pipeline(path: Path, filename: str, caption: str, provider, 
     if context_dropped:
         limitations.append(f'{context_dropped} claim(s) were checked without surrounding context, because the context '
                            'supplied was not found word for word in the video.')
+    if extracted.summary.poor_audio:
+        limitations.append(POOR_AUDIO_NOTE)
     return Report(**base, intent=extraction.intent, note=extraction.note, claims=results, limitations=limitations,
                   agent_steps=steps + extractor_steps, **overall(results),
                   omitted_claims=extraction.omitted_claims, coverage_status='incomplete' if refused else 'passed')
 
 
+POOR_AUDIO_NOTE = ('The speech was hard to make out, so the transcript may contain mistakes. Compare the claims with the '
+                   'video; the on-screen text and caption were read separately.')
 LINK_NOTE = ('The video was downloaded from the link for this check and deleted afterwards. '
              "When no caption was typed, the post's own caption or description was used.")
 

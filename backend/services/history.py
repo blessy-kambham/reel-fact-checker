@@ -5,6 +5,8 @@ queryable rows for claims and citations. Nothing is sent anywhere; the file stay
 
 The claim rows also let a repeated claim be recognised: `find_claim` returns the result an
 identical claim received in an earlier report, so it can be shown again without new research.
+Likewise `find_link` returns the report an article or video link received recently, so the same link
+pasted again is answered from the saved report.
 """
 import json
 import sqlite3
@@ -23,7 +25,8 @@ CREATE TABLE IF NOT EXISTS reports (
     coverage_status TEXT NOT NULL,
     model_calls INTEGER NOT NULL DEFAULT 0,
     search_calls INTEGER NOT NULL DEFAULT 0,
-    report_json TEXT NOT NULL
+    report_json TEXT NOT NULL,
+    source_key TEXT
 );
 CREATE TABLE IF NOT EXISTS claims (
     report_id TEXT NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
@@ -54,6 +57,14 @@ CREATE INDEX IF NOT EXISTS reports_created ON reports(created_at DESC);
 PREVIEW_CHARS = 200
 
 
+def reusable(report: Report) -> bool:
+    """Whether a report may be shown again for the same link: a live report whose claims were all researched to
+    the end and whose claim selection passed its check. A claim cut short by a failed search, a time limit or the
+    spending cap is marked incomplete, and such a report is researched again next time."""
+    return (report.mode == 'live' and report.coverage_status != 'incomplete'
+            and all(claim.status == 'complete' for claim in report.claims))
+
+
 class History:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -70,14 +81,25 @@ class History:
             except sqlite3.OperationalError:
                 pass  # another request opening the same history added it first
         db.execute('CREATE INDEX IF NOT EXISTS claims_key ON claims(claim_key)')
+        # Histories created before a link's report could be reused have no source key column yet.
+        if 'source_key' not in {row[1] for row in db.execute('PRAGMA table_info(reports)')}:
+            try:
+                db.execute('ALTER TABLE reports ADD COLUMN source_key TEXT')
+            except sqlite3.OperationalError:
+                pass  # another request opening the same history added it first
+        db.execute('CREATE INDEX IF NOT EXISTS reports_source ON reports(source_key)')
         return db
 
-    def save(self, report: Report) -> None:
+    def save(self, report: Report, source_key: str | None = None) -> None:
+        """Store a report. `source_key` names the link it was made from; it is kept only when the report is
+        worth showing again (see `reusable`), so a report hit by a failure is never served twice."""
+        key = source_key if source_key and reusable(report) else None
         with closing(self._connect()) as db, db:
-            db.execute('INSERT OR REPLACE INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', (
+            db.execute('INSERT OR REPLACE INTO reports (id, created_at, mode, submitted_text, intent, coverage_status, '
+                       'model_calls, search_calls, report_json, source_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', (
                 report.id, report.created_at, report.mode, report.submitted_text, report.intent,
                 report.coverage_status, report.usage.get('model_calls', 0), report.usage.get('search_calls', 0),
-                report.model_dump_json()))
+                report.model_dump_json(), key))
             db.execute('DELETE FROM claims WHERE report_id = ?', (report.id,))
             db.execute('DELETE FROM citations WHERE report_id = ?', (report.id,))
             for position, claim in enumerate(report.claims):
@@ -125,6 +147,13 @@ class History:
             return None
         claims = json.loads(row[0]).get('claims', [])
         return (ClaimResult.model_validate(claims[row[1]]), row[2], row[3]) if row[1] < len(claims) else None
+
+    def find_link(self, key: str, since: str):
+        """The newest report made from the same link (`key`) at or after `since` (an ISO timestamp), or None."""
+        with closing(self._connect()) as db:
+            row = db.execute("SELECT report_json FROM reports WHERE source_key = ? AND mode = 'live' AND created_at >= ? "
+                             'ORDER BY created_at DESC LIMIT 1', (key, since)).fetchone()
+        return Report.model_validate(json.loads(row[0])) if row else None
 
     def delete(self, report_id: str) -> bool:
         with closing(self._connect()) as db, db:

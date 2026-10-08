@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { downloadVerdictCard } from './card';
 
 function Evidence({ item, demo, cited }) {
   return <article className={`evidence evidence-${item.stance === 'FOR' ? 'for' : item.stance === 'AGAINST' ? 'against' : 'context'}`}>
@@ -43,6 +44,27 @@ function AgentSteps({ steps, label }) {
     })}</ol></details>;
 }
 
+// The Response Formatter's short version (backend/services/formatter.py) with a link that opens this saved report.
+function ShortSummary({ report }) {
+  const [message, setMessage] = useState('');
+  if (report.mode !== 'live' || !report.summary_text) return null;
+  const link = `${window.location.origin}/?report=${report.id}`;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(`${report.summary_text} Full report: ${link}`);
+      setMessage('Copied.');
+    } catch {
+      setMessage('This browser blocked copying. Select the text instead.');
+    }
+  }
+  return <div className="short-summary">
+    <p className="short-summary-label">Short summary</p>
+    <p className="short-summary-text">{report.summary_text} <span className="short-summary-link">Full report: {link}</span></p>
+    <div className="short-summary-actions screen-only"><button type="button" className="small-button" onClick={copy}>Copy</button><span role="status">{message}</span></div>
+    <p className="balance-note">The link opens this saved report for anyone signed in to this site.</p>
+  </div>;
+}
+
 export default function Report({ report }) {
   const reportElement = useRef(null);
   useEffect(() => {
@@ -66,6 +88,11 @@ export default function Report({ report }) {
       restoreScreen();
     };
   }, []);
+  const [cardMessage, setCardMessage] = useState('');
+  async function downloadCard() {
+    setCardMessage('');
+    try { await downloadVerdictCard(report); } catch (err) { setCardMessage(err.message || 'The card could not be drawn.'); }
+  }
   function download() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a');
@@ -75,12 +102,15 @@ export default function Report({ report }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <section ref={reportElement} className="report" aria-label="Fact-check report">
-    <div className="card-heading"><p className="report-kind">{report.mode === 'demo' ? 'Fictional demo report' : 'Research report'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button></div></div>
+    <div className="card-heading"><p className="report-kind">{report.mode === 'demo' ? 'Fictional demo report' : 'Research report'}</p><div className="report-actions"><button className="small-button" onClick={() => window.print()}>Print / Save PDF</button><button className="small-button" onClick={download}>Download JSON</button>{report.mode === 'live' && report.claims.length > 0 && <button className="small-button" onClick={downloadCard}>Download card</button>}</div></div>
+    {cardMessage && <p className="error" role="alert">{cardMessage}</p>}
     <h2>{report.mode === 'demo' ? 'See how evidence changes the story.' : 'Your claim-by-claim report'}</h2>
     {report.input_type === 'article' && <p className="report-meta">Article: {report.source_url?.startsWith('https://') ? <a href={report.source_url} target="_blank" rel="noopener noreferrer">{report.source_url}</a> : report.source_url}</p>}
     {report.input_type === 'article' && report.coverage_status === 'incomplete' && <p className="notice" role="alert">Some selected claims were not copied word for word from the article, so they were not researched.</p>}
     {report.input_type === 'video' && report.source_url && <p className="report-meta">Video link: {report.source_url.startsWith('https://') ? <a href={report.source_url} target="_blank" rel="noopener noreferrer">{report.source_url}</a> : report.source_url}</p>}
     {report.input_type === 'video' && report.media && <p className="report-meta">Video: {report.media.duration_seconds.toFixed(0)} s · {report.media.had_audio ? `speech transcribed${report.media.transcript_language ? ` (${report.media.transcript_language})` : ''}` : 'no audio'} · on-screen text read from {report.media.frames_read} frames</p>}
+    {report.input_type === 'video' && report.media?.poor_audio && <p className="notice withheld" role="note"><strong>Hard to hear.</strong> The speech was hard to make out, so the transcript may contain mistakes. Compare the claims with the video.</p>}
+    {report.shown_again && <p className="notice reused" role="note"><strong>Checked before.</strong> This link was checked on {new Date(report.created_at).toLocaleString()}. That report is shown again; no new research was done.</p>}
     {report.input_type === 'video' && report.coverage_status === 'incomplete' && <p className="notice" role="alert">Some selected claims were not found word for word in the video's transcript, on-screen text or caption, so they were not researched.</p>}
     {report.input_type === 'video' && report.source_text && <details className="video-content"><summary>What the video says (transcript, on-screen text, caption)</summary><p className="report-meta">Automatically transcribed and read; check it against the video.</p><pre>{report.source_text}</pre></details>}
     {!['article', 'video'].includes(report.input_type) && ['incomplete', 'unavailable'].includes(report.coverage_status) && <p className="notice" role="alert">Extraction coverage {report.coverage_status}. No research was started and no verdict was established. Submit each assertion separately.</p>}
@@ -91,6 +121,7 @@ export default function Report({ report }) {
       <span className="overall-label">Overall</span>
       <span className={`verdict verdict-${report.overall_verdict.toLowerCase().replaceAll(' ', '-')}`}>{report.overall_verdict}</span>
       <span className="overall-summary">{report.overall_summary}</span></p>}
+    <ShortSummary report={report} />
     <AgentSteps steps={report.agent_steps} label="How the agents prepared this report" />
     {!report.claims.length && <p>No factual claims were researched. Classification: {report.intent}.</p>}
     {report.claims.map((claim, index) => <article className="claim-result" key={index}>

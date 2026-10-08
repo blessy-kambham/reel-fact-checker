@@ -249,6 +249,11 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
 .overall-verdict .overall-label { font-weight: 700; color: var(--plum); }
 .overall-verdict .verdict { margin: 0; }
 .overall-verdict .overall-summary { flex-basis: 100%; }
+.short-summary { margin: 4px 0 18px; padding: 14px 16px; max-width: 62ch; background: #fff; border: 1.5px solid var(--rose); border-radius: 16px; }
+.short-summary-label { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--raspberry); }
+.short-summary-text { margin: 0 0 10px; font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+.short-summary-link { color: var(--mauve); }
+.short-summary-actions { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--mauve); }
 .explanation { margin: 4px 0 14px; font-size: 16px; line-height: 1.65; color: var(--plum); max-width: 62ch; }
 .evidence-balance { margin: 8px 0 14px; max-width: 62ch; }
 .balance-labels { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--plum); }
